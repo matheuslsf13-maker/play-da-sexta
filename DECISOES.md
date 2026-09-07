@@ -618,6 +618,18 @@ pedir a instalação; o único caminho é o menu de compartilhar do Safari. Ent�
 o mesmo botão abre o passo a passo em vez de instalar, e o texto diz por quê —
 senão parece defeito do app.
 
+**Onde ele fica** custou três tentativas, e a medição decidiu:
+
+| lugar | custo |
+|---|---|
+| cartão na tela inicial, com "agora não" | 132px de tela — e quem dispensasse perdia o atalho **para sempre** |
+| botão redondo ao lado do tema | **+43px** de altura no cabeçalho, que é fixo: 43px em toda tela do app |
+| pastilha na linha de status | **+5px**, e com texto em vez de só ícone |
+
+Ficou a pastilha. O botão redondo apertava a coluna do título de 171px para
+123px, e aí o subtítulo quebrava de 2 para 4 linhas — não era o botão que
+ocupava espaço, era o que ele empurrava.
+
 Detalhes que custaram atenção:
 - o evento **serve uma só vez**; se a pessoa recusar, o botão passa a ensinar na mão;
 - `display-mode: standalone` (e `navigator.standalone` no iOS) escondem o convite

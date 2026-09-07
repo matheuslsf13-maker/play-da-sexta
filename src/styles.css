@@ -928,6 +928,23 @@ textarea.input { line-height: 1.45; }
 }
 .bt-tema:active { background: rgba(255, 246, 238, .22); }
 
+/* atalho de instalar, na linha de status do cabecalho. Como botao redondo ao
+   lado do tema ele apertava o titulo e custava 43px de altura -- num cabecalho
+   fixo, isso e 43px em toda tela do app. Aqui custa 5px. */
+.chip-topo {
+  flex: none;
+  border: 1px solid rgba(255, 246, 238, .3);
+  background: rgba(255, 246, 238, .14);
+  /* o cabecalho e escuro nos dois temas, entao a cor nao acompanha o tema */
+  color: rgba(255, 246, 238, .92);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  font-weight: 800;
+  cursor: pointer;
+}
+.chip-topo:active { background: rgba(255, 246, 238, .24); }
+
 /* atalho para a apresentacao, na tela inicial */
 .card.apresentacao {
   display: flex;
@@ -948,28 +965,6 @@ textarea.input { line-height: 1.45; }
 .card.apresentacao { cursor: pointer; transition: transform .12s ease, filter .12s ease; }
 .card.apresentacao:hover { filter: brightness(1.06); }
 .card.apresentacao:active { transform: translateY(1px); }
-/* card de instalar: mesma anatomia do card da apresentacao, em verde-agua */
-.card.instalar-app {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  text-align: left;
-  border: 1.5px solid var(--teal);
-  background: var(--teal-suave);
-}
-.card.instalar-app .prox-titulo { color: var(--teal); }
-.card.instalar-app .prox-selo { background: var(--teal); }
-.card.instalar-app .prox-abrir { background: var(--teal); }
-.col-acoes {
-  flex: none;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 4px;
-}
-.col-acoes .linkish { padding: 0; }
-
 .passos-instalar {
   margin: 10px 0 12px;
   padding-left: 22px;

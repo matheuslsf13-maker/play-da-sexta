@@ -1,6 +1,5 @@
 import { useEffect, useState } from 'react'
 import { Modal } from './ui'
-import { CHAVE } from '../lib/chaves'
 
 /**
  * INSTALAR O APP NA TELA DE INICIO
@@ -13,8 +12,14 @@ import { CHAVE } from '../lib/chaves'
  * a instalacao. La so existe o caminho manual, pelo botao de compartilhar do
  * Safari. Entao no iPhone o botao abre o passo a passo em vez de instalar.
  *
- * Nos dois casos o botao some depois de instalado, e quem nao quiser pode
- * dispensar -- a escolha fica guardada neste aparelho.
+ * Fica na LINHA DE STATUS do cabecalho, junto do "so leitura", e some sozinho
+ * depois de instalado.
+ *
+ * Ja foi um cartao grande na tela inicial com um "agora nao": ruim dos dois
+ * lados -- ocupava a tela de quem so queria ver o ranking, e quem dispensasse
+ * perdia o atalho para sempre. Depois virou um botao redondo ao lado do tema,
+ * e ai apertava o titulo: medido, custava 43px de altura num cabecalho que e
+ * fixo, ou seja, em toda tela do app. Como pastilha na linha de baixo custa 5px.
  */
 
 type EventoDeInstalacao = Event & {
@@ -40,13 +45,6 @@ export function BotaoInstalar() {
   const [evento, setEvento] = useState<EventoDeInstalacao | null>(null)
   const [instalado, setInstalado] = useState(jaInstalado)
   const [passoAPasso, setPassoAPasso] = useState(false)
-  const [dispensado, setDispensado] = useState(() => {
-    try {
-      return localStorage.getItem(CHAVE.instalarDispensado) === '1'
-    } catch {
-      return false
-    }
-  })
 
   useEffect(() => {
     const aoPoder = (e: Event) => {
@@ -66,7 +64,7 @@ export function BotaoInstalar() {
     }
   }, [])
 
-  if (instalado || dispensado) return null
+  if (instalado) return null
 
   const iphone = ehIPhone()
 
@@ -82,37 +80,15 @@ export function BotaoInstalar() {
     if (outcome === 'accepted') setInstalado(true)
   }
 
-  function dispensar() {
-    setDispensado(true)
-    try {
-      localStorage.setItem(CHAVE.instalarDispensado, '1')
-    } catch {
-      /* navegador sem armazenamento: some so nesta sessao */
-    }
-  }
-
   return (
     <>
-      <div className="card instalar-app">
-        <span className="prox-selo">📲</span>
-        <span className="grow" style={{ minWidth: 0 }}>
-          <span className="prox-titulo">Fica melhor instalado</span>
-          <span className="prox-info">Colocar o Play na tela de início</span>
-          <span className="prox-acao">
-            {iphone
-              ? 'abre em tela cheia, sem a barra do navegador'
-              : 'abre em tela cheia e funciona até sem internet'}
-          </span>
-        </span>
-        <span className="col-acoes">
-          <button className="prox-abrir" onClick={() => void instalar()}>
-            {evento ? 'Instalar' : 'Como faz'}
-          </button>
-          <button className="linkish tiny" onClick={dispensar}>
-            agora não
-          </button>
-        </span>
-      </div>
+      <button
+        className="chip-topo"
+        onClick={() => void instalar()}
+        title="Instalar o app na tela de início"
+      >
+        📲 Instalar
+      </button>
 
       {passoAPasso && (
         <Modal
@@ -122,8 +98,8 @@ export function BotaoInstalar() {
           {iphone ? (
             <>
               <p className="small" style={{ marginTop: 0 }}>
-                No iPhone o próprio sistema não deixa o site instalar sozinho — tem que ser por
-                aqui, e <strong>pelo Safari</strong> (no Chrome a opção não aparece).
+                No iPhone o próprio sistema não deixa nenhum site se instalar sozinho — tem que ser
+                por aqui, e <strong>pelo Safari</strong> (no Chrome a opção não aparece).
               </p>
               <ol className="passos-instalar">
                 <li>
@@ -141,7 +117,7 @@ export function BotaoInstalar() {
           ) : (
             <>
               <p className="small" style={{ marginTop: 0 }}>
-                Se o botão de instalar não apareceu, dá para fazer pelo menu do navegador:
+                Se a caixa de instalar não abriu, dá para fazer pelo menu do navegador:
               </p>
               <ol className="passos-instalar">
                 <li>

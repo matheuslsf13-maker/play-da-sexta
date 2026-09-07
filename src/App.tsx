@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { BotaoInstalar } from './components/InstalarApp'
 import { Logo, Modal, Toast, useToast } from './components/ui'
 import { useStore } from './lib/store'
 import { aplicarTema, temaSalvo, type Tema } from './lib/tema'
@@ -61,6 +62,7 @@ export default function App() {
                   <span>{online ? 'só leitura' : 'modo local'}</span>
                 </>
               )}
+              <BotaoInstalar />
             </div>
           </div>
           <button

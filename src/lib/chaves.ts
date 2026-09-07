@@ -25,8 +25,6 @@ export const CHAVE = {
   fimDasPartidas: 'play-de-todas:fim-das-partidas',
   /** Modo diurno ou noturno escolhido por quem usa. */
   tema: 'play-de-todas:tema',
-  /** Dispensou o convite para instalar o app neste aparelho. */
-  instalarDispensado: 'play-de-todas:instalar-dispensado',
 } as const
 
 const RENOMEADAS: [antiga: string, nova: string][] = [
