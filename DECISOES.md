@@ -725,9 +725,8 @@ sozinho, 4 conferidos na mão.
       por um link antigo precisa instalar de novo.
 - [ ] Mensagem pronta para o grupo pedindo que escrevam o nome completo certo na
       lista de confirmação (facilita a importação).
-- [ ] **Rodar o script `07-apelido.sql`** no SQL Editor (adiciona a coluna do
-      apelido). Enquanto não rodar, o app funciona igual: o `savePlayer` detecta
-      a coluna faltando e salva o resto, só o apelido não persiste.
+- [x] ~~Rodar o script `07-apelido.sql`~~ — feito e conferido em 07/09/2026:
+      a coluna `nickname` está no banco e responde na leitura pública.
 - [x] ~~Rodar os scripts `04`, `05` e `06` no SQL Editor~~ — feito e conferido em
       05/09/2026: `started_at`, `ended_at`, `format`, `groups`, `ranked` e a
       tabela `month_closures` estão no banco, com RLS (leitura pública, escrita
