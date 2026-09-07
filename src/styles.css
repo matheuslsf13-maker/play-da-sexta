@@ -302,17 +302,30 @@ label.field > span {
   gap: 8px;
   margin-top: 6px;
 }
-.podium .slot { text-align: center; }
+/* `min-width: 0` e o que faz o nome comprido virar reticencia. Sem isso a
+   coluna do grid cresce ate caber o nome inteiro e o podio perde a proporcao:
+   um "Mariana Valerio dos Santos" no 2o lugar deixava a coluna dele mais larga
+   que a do 1o. */
+.podium .slot { text-align: center; min-width: 0; }
 .podium .base {
   margin-top: 8px;
   border-radius: 14px 14px 0 0;
   padding: 8px 4px 10px;
   font-weight: 800;
   color: var(--sempre-escuro);
+  /* Alturas MINIMAS, nao fixas. Com `height` o degrau do 3o lugar tinha 46px
+     para um conteudo de 53px, e o "13 pts" caia 7px para fora da barra --
+     ficava solto no fundo do cartao, parecendo defeito. */
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 1px;
 }
-.podium .p1 .base { background: linear-gradient(180deg, var(--yellow), #e0a500); height: 78px; }
-.podium .p2 .base { background: linear-gradient(180deg, #cdd3e6, #9aa1bd); height: 58px; }
-.podium .p3 .base { background: linear-gradient(180deg, #f0a86e, var(--orange)); height: 46px; }
+.podium .p1 .base { background: linear-gradient(180deg, var(--yellow), #e0a500); min-height: 84px; }
+.podium .p2 .base { background: linear-gradient(180deg, #cdd3e6, #9aa1bd); min-height: 66px; }
+.podium .p3 .base { background: linear-gradient(180deg, #f0a86e, var(--orange)); min-height: 56px; }
+.podium .pos, .podium .pts { line-height: 1.15; }
 .podium .pos { font-size: 22px; }
 .podium .pts { font-size: 11px; font-weight: 700; opacity: .9; }
 .podium .nm { font-size: 12px; font-weight: 700; margin-top: 6px; }
