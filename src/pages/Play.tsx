@@ -372,7 +372,7 @@ function NewPlay({
             <em className="hint">
               {format === 'todas'
                 ? 'cada menina faz dupla com cada uma das outras exatamente uma vez'
-                : 'o mesmo rodízio, mas dentro de cada grupo — os grupos saem por nível, os pontos continuam individuais e o ranking do dia é um só'}
+                : 'o mesmo rodízio, mas dentro de cada grupo — os grupos saem por nível, os pontos continuam individuais, e cada grupo tem o seu pódio'}
             </em>
           </div>
 
@@ -1126,7 +1126,8 @@ function PlayDetail({
             ))}
           </div>
           <p className="tiny muted" style={{ marginBottom: 0 }}>
-            Cada grupo é um rodízio próprio, mas os pontos são individuais e o ranking do dia é um só.
+            Cada grupo é um rodízio próprio e tem o seu pódio (1º, 2º e 3º). Os pontos continuam
+            individuais e a classificação do dia é uma só.
           </p>
         </div>
       )}
