@@ -115,7 +115,9 @@ export function conciliar(nomes: string[], players: Player[]): ItemDaLista[] {
     const alvo = normalizar(texto)
 
     // 1) nome ou apelido identico
-    const exata = players.find((p) => normalizar(p.name) === alvo && !usados.has(p.id))
+    const exata = players.find(
+      (p) => (normalizar(p.name) === alvo || normalizar(p.nickname ?? '') === alvo) && !usados.has(p.id),
+    )
     const porApelido = exata
       ? null
       : players.find((p) => (p.aliases ?? []).some((a) => normalizar(a) === alvo) && !usados.has(p.id))
@@ -137,7 +139,12 @@ export function conciliar(nomes: string[], players: Player[]): ItemDaLista[] {
       .filter((p) => !usados.has(p.id))
       .map((p) => ({
         player: p,
-        score: Math.max(semelhanca(texto, p.name), ...(p.aliases ?? []).map((a) => semelhanca(texto, a)), 0),
+        score: Math.max(
+          semelhanca(texto, p.name),
+          p.nickname ? semelhanca(texto, p.nickname) : 0,
+          ...(p.aliases ?? []).map((a) => semelhanca(texto, a)),
+          0,
+        ),
       }))
       .filter((s) => s.score >= DUVIDA)
       .sort((a, b) => b.score - a.score)

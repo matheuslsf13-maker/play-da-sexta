@@ -664,9 +664,21 @@ escrito. Renomear alguém não mexe em partida, ponto nem sequência — o hist�
 está preso ao cadastro. A tela de editar perfil mostra quantas partidas ela tem
 justamente para deixar isso visível na hora de trocar o nome.
 
+**Dois nomes, papéis diferentes:**
+
+- `name` é o **nome de cadastro**, completo. Serve para conferir a lista sem
+  confundir duas Anas, e só aparece na tela de Meninas.
+- `nickname` é o **apelido**, como ela aparece na quadra: ranking, partidas,
+  textos do WhatsApp, artes e as iniciais do avatar. Vazio quer dizer "usa o
+  nome de cadastro", então quem não tem apelido não muda em nada.
+
+Tudo isso passa por `nameOf()` no store — um lugar só, e a tela inteira segue.
+A importação da lista também casa pelo apelido, senão a menina que o grupo
+escreve como "Aninha" viraria um segundo cadastro.
+
 O que existe hoje para manter o cadastro único:
 
-- **Editar perfil** — trocar o nome e as outras grafias (apelidos).
+- **Editar perfil** — trocar o nome de cadastro, o apelido e as outras grafias.
 - **Apelidos** — as grafias que a lista do grupo já usou. São eles que fazem a
   importação do WhatsApp cair na pessoa certa em vez de criar uma segunda.
 - **🔗 Juntar** — se mesmo assim nasceram duas, o merge passa partidas, pontos e
@@ -713,6 +725,9 @@ sozinho, 4 conferidos na mão.
       por um link antigo precisa instalar de novo.
 - [ ] Mensagem pronta para o grupo pedindo que escrevam o nome completo certo na
       lista de confirmação (facilita a importação).
+- [ ] **Rodar o script `07-apelido.sql`** no SQL Editor (adiciona a coluna do
+      apelido). Enquanto não rodar, o app funciona igual: o `savePlayer` detecta
+      a coluna faltando e salva o resto, só o apelido não persiste.
 - [x] ~~Rodar os scripts `04`, `05` e `06` no SQL Editor~~ — feito e conferido em
       05/09/2026: `started_at`, `ended_at`, `format`, `groups`, `ranked` e a
       tabela `month_closures` estão no banco, com RLS (leitura pública, escrita

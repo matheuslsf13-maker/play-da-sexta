@@ -4,6 +4,14 @@ export type Player = {
   photo_url: string | null
   active: boolean
   created_at: string
+  /**
+   * Como ela aparece na quadra: nos rankings, nas partidas, nos textos e nas
+   * artes. Vazio quer dizer "usa o nome do cadastro".
+   *
+   * `name` e o nome de cadastro, completo -- serve para nao confundir duas
+   * Anas na hora de conferir a lista. `nickname` e o que o grupo chama.
+   */
+  nickname?: string | null
   /** Outras grafias que a lista do grupo ja usou para essa jogadora. */
   aliases?: string[]
 }

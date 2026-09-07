@@ -34,7 +34,16 @@ export const supabaseRepo: Repo = {
   },
   async savePlayer(p: Player) {
     const { error } = await client().from('players').upsert(p)
-    if (error) throw error
+    if (!error) return
+    // banco ainda sem a coluna do apelido (script 07 nao rodou): salva o resto,
+    // para nao travar o cadastro de quem ainda nao migrou
+    if (/nickname/.test(error.message ?? '')) {
+      const { nickname: _apelido, ...resto } = p
+      const retry = await client().from('players').upsert(resto)
+      if (retry.error) throw retry.error
+      return
+    }
+    throw error
   },
   async deletePlayer(id: string) {
     const { error } = await client().from('players').delete().eq('id', id)

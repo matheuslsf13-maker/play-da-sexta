@@ -263,7 +263,13 @@ export function StoreProvider({ children }: { children: React.ReactNode }) {
         await supabase.auth.signOut()
       },
       playerById: (id) => byId.get(id),
-      nameOf: (id) => byId.get(id)?.name ?? '—',
+      // o apelido e o nome de quadra: manda em ranking, partida, texto e arte.
+      // O nome de cadastro so aparece na tela de Meninas.
+      nameOf: (id) => {
+        const p = byId.get(id)
+        if (!p) return '—'
+        return p.nickname?.trim() || p.name
+      },
     }
   }, [data, loading, error, repo, userEmail, reload, push, queue.length, syncing])
 

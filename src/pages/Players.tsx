@@ -134,7 +134,12 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                   onChange={(e) => void pickPhoto(p, e.target.files?.[0])}
                 />
                 <div className="grow">
-                  <div style={{ fontWeight: 700 }} className="ellipsis">{p.name}</div>
+                  <div style={{ fontWeight: 700 }} className="ellipsis">
+                    {p.nickname?.trim() || p.name}
+                  </div>
+                  {p.nickname?.trim() && p.nickname.trim() !== p.name && (
+                    <div className="tiny muted ellipsis">{p.name}</div>
+                  )}
                   <div className="tiny muted">
                     {busy === p.id ? (
                       'salvando foto…'
@@ -281,6 +286,7 @@ function EditarPerfil({
 }) {
   const { data } = useStore()
   const [nome, setNome] = useState(jogadora.name)
+  const [apelido, setApelido] = useState(jogadora.nickname ?? '')
   const [apelidos, setApelidos] = useState((jogadora.aliases ?? []).join('\n'))
 
   const historico = useMemo(() => {
@@ -299,15 +305,37 @@ function EditarPerfil({
       .split('\n')
       .map((x) => x.trim())
       .filter(Boolean)
-    onSalvar({ ...jogadora, name: limpo, aliases: [...new Set(lista)] })
+    onSalvar({
+      ...jogadora,
+      name: limpo,
+      nickname: apelido.trim() || null,
+      aliases: [...new Set(lista)],
+    })
   }
 
   return (
     <Modal title={`Perfil de ${jogadora.name}`} onClose={onClose}>
       <label className="field">
-        <span>Nome</span>
+        <span>Nome de cadastro</span>
         <input className="input" value={nome} autoFocus onChange={(e) => setNome(e.target.value)} />
       </label>
+      <p className="tiny muted" style={{ marginTop: 6 }}>
+        O nome completo, para conferir a lista sem confundir duas Anas. Só aparece aqui.
+      </p>
+
+      <label className="field" style={{ marginTop: 12 }}>
+        <span>Apelido — como aparece na quadra</span>
+        <input
+          className="input"
+          value={apelido}
+          placeholder={nome.split(' ')[0] || 'como o grupo chama'}
+          onChange={(e) => setApelido(e.target.value)}
+        />
+      </label>
+      <p className="tiny muted" style={{ marginTop: 6 }}>
+        É este que vai para o ranking, as partidas, o texto do WhatsApp e as artes. Deixe vazio
+        para usar o nome de cadastro.
+      </p>
       {repetido && (
         <div className="banner warn" style={{ marginTop: 8 }}>
           Já existe outra jogadora com esse nome. Se for a mesma pessoa cadastrada duas vezes,

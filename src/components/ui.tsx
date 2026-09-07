@@ -10,10 +10,13 @@ export function initials(name: string): string {
 
 export function Avatar({ player, size = 34 }: { player?: Player; size?: number }) {
   const style: React.CSSProperties = { width: size, height: size, fontSize: Math.round(size * 0.38) }
+  // as iniciais seguem o APELIDO, para casarem com o nome que aparece do lado:
+  // "Aninha" com um circulo escrito "AS" (de Ana Cristina Souza) confunde
+  const exibido = player ? player.nickname?.trim() || player.name : ''
   if (player?.photo_url) {
-    return <img className="avatar" style={style} src={player.photo_url} alt={player.name} />
+    return <img className="avatar" style={style} src={player.photo_url} alt={exibido} />
   }
-  return <span className="avatar" style={style}>{player ? initials(player.name) : '?'}</span>
+  return <span className="avatar" style={style}>{player ? initials(exibido) : '?'}</span>
 }
 
 /**
