@@ -1,7 +1,9 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import { Avatar, Empty, Modal } from '../components/ui'
 import { squareThumb } from '../lib/image'
+import { playedMatches } from '../lib/stats'
 import { useStore } from '../lib/store'
+import { jogadorasDaPartida } from '../lib/pairing'
 import { uid, type Player } from '../lib/types'
 
 export default function Players({ onToast }: { onToast: (m: string) => void }) {
@@ -9,6 +11,7 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
   const [name, setName] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [juntando, setJuntando] = useState<Player | null>(null)
+  const [editando, setEditando] = useState<Player | null>(null)
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   const sorted = [...data.players].sort(
@@ -83,6 +86,18 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
         </div>
       )}
 
+      {editando && (
+        <EditarPerfil
+          jogadora={editando}
+          onClose={() => setEditando(null)}
+          onSalvar={(p) => {
+            void savePlayer(p)
+            setEditando(null)
+            onToast('Perfil salvo ✅')
+          }}
+        />
+      )}
+
       {juntando && (
         <JuntarJogadoras
           origem={juntando}
@@ -128,6 +143,10 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                         {p.active ? 'ativa' : 'inativa'}
                         {canEdit && (
                           <>
+                            {' · '}
+                            <button className="linkish" onClick={() => setEditando(p)}>
+                              editar perfil
+                            </button>
                             {' · '}
                             <button className="linkish" onClick={() => fileRefs.current[p.id]?.click()}>
                               {p.photo_url ? 'trocar foto' : 'pôr foto'}
@@ -234,6 +253,101 @@ function JuntarJogadoras({
         }}
       >
         🔗 Juntar em {alvo?.name ?? '…'}
+      </button>
+    </Modal>
+  )
+}
+
+/**
+ * Editar o perfil da jogadora.
+ *
+ * O nome e so um ROTULO: cada jogadora tem um id proprio e as partidas guardam
+ * esse id, nunca o nome. Renomear nao mexe em partida, ponto nem sequencia --
+ * e o modal mostra o tamanho do historico dela justamente para deixar isso
+ * visivel na hora de trocar.
+ *
+ * Os apelidos sao as outras grafias que a lista do grupo ja usou para ela. Sao
+ * eles que fazem a importacao do WhatsApp cair na pessoa certa em vez de criar
+ * uma segunda cadastrada com o nome escrito de outro jeito.
+ */
+function EditarPerfil({
+  jogadora,
+  onClose,
+  onSalvar,
+}: {
+  jogadora: Player
+  onClose: () => void
+  onSalvar: (p: Player) => void
+}) {
+  const { data } = useStore()
+  const [nome, setNome] = useState(jogadora.name)
+  const [apelidos, setApelidos] = useState((jogadora.aliases ?? []).join('\n'))
+
+  const historico = useMemo(() => {
+    const jogadas = playedMatches(data).filter((m) => jogadorasDaPartida(m).includes(jogadora.id))
+    const dias = new Set(jogadas.map((m) => m.session_id)).size
+    return { partidas: jogadas.length, dias }
+  }, [data, jogadora.id])
+
+  const limpo = nome.trim()
+  const repetido = data.players.some(
+    (p) => p.id !== jogadora.id && p.name.trim().toLowerCase() === limpo.toLowerCase(),
+  )
+
+  function salvar() {
+    const lista = apelidos
+      .split('\n')
+      .map((x) => x.trim())
+      .filter(Boolean)
+    onSalvar({ ...jogadora, name: limpo, aliases: [...new Set(lista)] })
+  }
+
+  return (
+    <Modal title={`Perfil de ${jogadora.name}`} onClose={onClose}>
+      <label className="field">
+        <span>Nome</span>
+        <input className="input" value={nome} autoFocus onChange={(e) => setNome(e.target.value)} />
+      </label>
+      {repetido && (
+        <div className="banner warn" style={{ marginTop: 8 }}>
+          Já existe outra jogadora com esse nome. Se for a mesma pessoa cadastrada duas vezes,
+          feche aqui e use o <strong>🔗</strong> para juntar as duas.
+        </div>
+      )}
+
+      <label className="field" style={{ marginTop: 12 }}>
+        <span>Outras grafias do nome (uma por linha)</span>
+        <textarea
+          className="input"
+          rows={3}
+          value={apelidos}
+          placeholder={'Ana\nAninha\nAna Cristina'}
+          onChange={(e) => setApelidos(e.target.value)}
+        />
+      </label>
+      <p className="tiny muted" style={{ marginTop: 6 }}>
+        É por aqui que a importação da lista do grupo acerta a pessoa. Se ela aparece na lista às
+        vezes como <em>Ana</em> e às vezes como <em>Aninha</em>, escreva as duas — assim o app não
+        cadastra uma segunda.
+      </p>
+
+      <div className="banner info" style={{ marginTop: 12 }}>
+        📚 <strong>{historico.partidas} partida(s)</strong> em{' '}
+        <strong>{historico.dias} play(s)</strong> no histórico dela. Trocar o nome{' '}
+        <strong>não mexe em nada disso</strong>: as partidas ficam ligadas ao cadastro, não ao nome
+        escrito.
+      </div>
+
+      <button
+        className="btn pink block"
+        style={{ marginTop: 12 }}
+        disabled={!limpo}
+        onClick={salvar}
+      >
+        Salvar
+      </button>
+      <button className="btn ghost block sm" style={{ marginTop: 8 }} onClick={onClose}>
+        Cancelar
       </button>
     </Modal>
   )

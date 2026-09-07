@@ -657,6 +657,33 @@ As alterações aparecem na tela na hora e vão para uma **fila serializável**
 (`src/data/queue.ts`) que sobrevive a refresh e a celular sem sinal. Isso é
 essencial: a quadra da V3 tem sinal ruim e o play não pode parar.
 
+## Quem é quem: o nome é rótulo, o id é a pessoa
+
+Cada jogadora tem um **id próprio** e as partidas guardam esse id, nunca o nome
+escrito. Renomear alguém não mexe em partida, ponto nem sequência — o histórico
+está preso ao cadastro. A tela de editar perfil mostra quantas partidas ela tem
+justamente para deixar isso visível na hora de trocar o nome.
+
+O que existe hoje para manter o cadastro único:
+
+- **Editar perfil** — trocar o nome e as outras grafias (apelidos).
+- **Apelidos** — as grafias que a lista do grupo já usou. São eles que fazem a
+  importação do WhatsApp cair na pessoa certa em vez de criar uma segunda.
+- **🔗 Juntar** — se mesmo assim nasceram duas, o merge passa partidas, pontos e
+  sequência de uma para a outra.
+
+### ⚠️ CPF, não
+
+A ideia de vincular CPF para garantir cadastro único foi levantada e **está
+descartada**: a tabela `players` tem **leitura pública** (é o que deixa o grupo
+abrir o link sem login). Um CPF ali seria um CPF publicado para qualquer pessoa
+que abrisse o endereço — dado sensível, exposto de graça, e sem necessidade
+nenhuma: o id já garante unicidade, e ele não é digitado por ninguém.
+
+Se um dia fizer falta um identificador visível para conferência, use algo que
+não seja sensível (data de nascimento, por exemplo) — e ainda assim, pensando em
+que ele fica público.
+
 ## Importação da lista do WhatsApp
 
 Cola a lista numerada de confirmadas; o app casa os nomes sozinho (normalização
