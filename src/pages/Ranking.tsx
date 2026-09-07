@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { Avatar, Empty, Logo, Modal, StatBox, shareOrCopy } from '../components/ui'
+import { BotaoInstalar } from '../components/InstalarApp'
 import { buildMonthPoster } from '../lib/poster'
 import { monthRankingText } from '../lib/share'
 import { POINTS_TABLE } from '../lib/scoring'
@@ -179,6 +180,8 @@ export default function Ranking({
           <div className="tiny muted">Beach Tennis · V3 Arena · <em>mais que um play, uma experiência!</em></div>
         </div>
       </div>
+
+      <BotaoInstalar />
 
       <a
         className="card apresentacao"

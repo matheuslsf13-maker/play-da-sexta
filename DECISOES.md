@@ -607,6 +607,25 @@ A arte de fechamento (canvas) segue a mesma paleta.
 - O fogo e o título de status aparecem **só para o 1º lugar** na arte.
 - A classificação da tela inicial mostra o top 10 e expande sob demanda.
 
+## Botão de instalar: dá no Android, não dá no iPhone
+
+O Chrome (Android e computador) avisa que o app é instalável pelo evento
+`beforeinstallprompt`. Segurando esse evento — `preventDefault()` e guardar —
+o botão abre a caixa de instalação do próprio sistema. Um toque e acabou.
+
+**No iPhone não existe equivalente.** A Apple não expõe nenhuma API para um site
+pedir a instalação; o único caminho é o menu de compartilhar do Safari. Então lá
+o mesmo botão abre o passo a passo em vez de instalar, e o texto diz por quê —
+senão parece defeito do app.
+
+Detalhes que custaram atenção:
+- o evento **serve uma só vez**; se a pessoa recusar, o botão passa a ensinar na mão;
+- `display-mode: standalone` (e `navigator.standalone` no iOS) escondem o convite
+  para quem já instalou;
+- o iPad moderno se apresenta como **Macintosh** — o que o entrega é
+  `maxTouchPoints > 1`;
+- quem não quiser some com o cartão, e a escolha fica guardada no aparelho.
+
 ## Infra
 
 - **Supabase**: leitura pública (o grupo do WhatsApp só abre o link), escrita só

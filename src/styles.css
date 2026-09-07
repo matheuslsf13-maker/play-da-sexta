@@ -948,6 +948,39 @@ textarea.input { line-height: 1.45; }
 .card.apresentacao { cursor: pointer; transition: transform .12s ease, filter .12s ease; }
 .card.apresentacao:hover { filter: brightness(1.06); }
 .card.apresentacao:active { transform: translateY(1px); }
+/* card de instalar: mesma anatomia do card da apresentacao, em verde-agua */
+.card.instalar-app {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  border: 1.5px solid var(--teal);
+  background: var(--teal-suave);
+}
+.card.instalar-app .prox-titulo { color: var(--teal); }
+.card.instalar-app .prox-selo { background: var(--teal); }
+.card.instalar-app .prox-abrir { background: var(--teal); }
+.col-acoes {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+.col-acoes .linkish { padding: 0; }
+
+.passos-instalar {
+  margin: 10px 0 12px;
+  padding-left: 22px;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+.passos-instalar li::marker { color: var(--pink); font-weight: 800; }
+
 .prox-abrir {
   flex: none;
   align-self: center;
