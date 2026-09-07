@@ -887,19 +887,30 @@ function PlayDetail({
     })
   }, [pendentes, proximas, ocupadas, espera, session.player_ids])
 
-  /** Duplas que aparecem mais de uma vez no dia (sobra do rodizio impar). */
+  /**
+   * As duplas que jogam duas vezes no dia, por partida.
+   *
+   * Nao e sobra nem defeito: quando o grupo nao fecha certo (6, 7, 10, 11
+   * meninas) algumas duplas repetem DE PROPOSITO, escolhidas para que cada
+   * jogadora repita a mesma quantidade -- sem isso duas do grupo jogariam uma
+   * partida a mais que as outras.
+   */
   const duplasRepetidas = useMemo(() => {
     const vistas = new Map<string, string>() // dupla -> id da primeira partida
-    const repetidas = new Set<string>() // ids de partida que repetem uma dupla
+    const porPartida = new Map<string, string[]>() // partida -> duplas que repetem
     for (const m of matches) {
       for (const d of [m.team_a, m.team_b]) {
         const k = pairKey(d[0], d[1])
-        if (vistas.has(k) && vistas.get(k) !== m.id) repetidas.add(m.id)
-        else if (!vistas.has(k)) vistas.set(k, m.id)
+        if (vistas.has(k) && vistas.get(k) !== m.id) {
+          const nomes = `${nameOf(d[0])} + ${nameOf(d[1])}`
+          porPartida.set(m.id, [...(porPartida.get(m.id) ?? []), nomes])
+        } else if (!vistas.has(k)) {
+          vistas.set(k, m.id)
+        }
       }
     }
-    return repetidas
-  }, [matches])
+    return porPartida
+  }, [matches, nameOf])
 
   function setScore(m: Match, a: number | null, b: number | null) {
     // lancar o placar tambem encerra a partida: a quadra fica livre de novo
@@ -1563,7 +1574,14 @@ function MatchCard({
     <div className="match-head">
       <span>
         Quadra {quadra} <GrupoTag grupo={grupo} total={totalGrupos} />
-        {repetida && <span className="repetida-tag" title="dupla que joga uma segunda vez">🔁</span>}
+        {repetida && (
+          <span
+            className="repetida-tag"
+            title="uma das duplas joga pela segunda vez, para todas fecharem com o mesmo número de partidas"
+          >
+            🔁
+          </span>
+        )}
       </span>
       <span>{iniciada ? '🟢 em quadra' : editable ? 'próxima' : 'sem placar'}</span>
     </div>
@@ -1691,7 +1709,7 @@ function ListaDePartidas({
   jogos?: Map<string, number>
   grupoDe: Map<string, number>
   totalGrupos: number
-  repetidas: Set<string>
+  repetidas: Map<string, string[]>
   emQuadra: Set<string>
   target?: number
   editable?: boolean
@@ -1746,7 +1764,11 @@ function ListaDePartidas({
                     {jogada && pb > 0 && <i> +{pb}</i>}
                   </span>
                   {repetidas.has(m.id) && (
-                    <span className="tiny muted">🔁 dupla repetida (sobra do rodízio)</span>
+                    <span className="tiny muted">
+                      🔁 {(repetidas.get(m.id) as string[]).join(' e ')}{' '}
+                      {(repetidas.get(m.id) as string[]).length > 1 ? 'jogam' : 'joga'} pela 2ª vez
+                      — é o que deixa todas com o mesmo número de partidas
+                    </span>
                   )}
                   {novatas.length > 0 && (
                     <span className="tiny" style={{ color: 'var(--teal)', fontWeight: 700 }}>
