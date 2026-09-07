@@ -646,8 +646,9 @@ Detalhes que custaram atenção:
   públicas por natureza, foi escolha consciente.
 - ⚠️ A **secret key** (`service_role`) **nunca** entra no app nem no repositório.
   Ela dá acesso total ao banco, ignorando todas as regras de permissão.
-  **Pendência aberta:** essa chave passou por uma conversa de chat e por isso
-  precisa ser **rotacionada** em Project Settings → API Keys.
+  A chave original passou por uma conversa de chat e foi **revogada em
+  07/09/2026**. O app não usa chave secreta nenhuma, então nada quebrou —
+  conferido na hora: leitura pública 200, escrita sem login 401.
 - Publicação por GitHub Actions no GitHub Pages a cada push na `main`.
 
 ## Escrita otimista
@@ -669,17 +670,20 @@ sozinho, 4 conferidos na mão.
 
 ## Pendências
 
-- [ ] **Rotacionar a secret key do Supabase** (segurança, item mais importante).
+- [x] ~~**Rotacionar a secret key do Supabase**~~ — revogada em 07/09/2026.
+      Conferido logo depois: a leitura pública continua respondendo 200 e a
+      escrita sem login continua sendo negada com 401.
 - [x] ~~**Apresentação para o grupo**~~ — feita como uma **página que roda
       sozinha**, em 12 cenas (o que é o app, instalar no iPhone e no Android,
       como o play funciona, a pontuação, o mini-game dos status e a Duquesa com
       a premiação secreta). Dá para mandar o link ou gravar a tela dela para
-      virar vídeo. Publicada como artifact — o link está com o dono do projeto.
-- [ ] **Reenviar o link no grupo.** O repositório foi renomeado para
-      `play-da-sexta` e o link antigo (`play-das-meninas-`) dá **404** — o
-      GitHub Pages não redireciona. Quem já tinha instalado na tela de início
-      precisa instalar de novo pelo link novo:
-      `https://matheuslsf13-maker.github.io/play-da-sexta/`
+      virar vídeo. No ar em **`https://playdetodas.com.br/apresentacao/`**, com
+      botão de voltar para o app.
+- [ ] **Reenviar o link no grupo.** O endereço agora é
+      **`https://playdetodas.com.br`**, com HTTPS e certificado válido desde
+      07/09/2026. Os links antigos (`play-das-meninas-`, `play-da-sexta`) dão
+      **404** — o GitHub Pages não redireciona. Quem instalou na tela de início
+      por um link antigo precisa instalar de novo.
 - [ ] Mensagem pronta para o grupo pedindo que escrevam o nome completo certo na
       lista de confirmação (facilita a importação).
 - [x] ~~Rodar os scripts `04`, `05` e `06` no SQL Editor~~ — feito e conferido em
