@@ -1101,6 +1101,9 @@ function PlayDetail({
    * condicao basta).
    */
   const jaPodemIr = useMemo(() => {
+    // play encerrado nao libera ninguem: a noite acabou para todo mundo, e o
+    // aviso viraria a lista inteira de quem jogou
+    if (session.status === 'finished') return []
     const comJogo = new Set<string>()
     for (const m of matches) {
       if (isPlayed(m)) continue
@@ -1113,7 +1116,7 @@ function PlayDetail({
       return session.player_ids.filter((id) => !comJogo.has(id) && !vivasAgora.has(id))
     }
     return session.player_ids.filter((id) => !comJogo.has(id))
-  }, [matches, soFase2, session.duos, session.player_ids, vivas])
+  }, [matches, soFase2, session.duos, session.player_ids, session.status, vivas])
 
   const doneCount = matches.filter(isPlayed).length
   const finished = session.status === 'finished'
