@@ -539,7 +539,7 @@ function ConfirmarFechamento({
       ) : (
         <>
           <div className="section-title" style={{ fontSize: 13 }}>
-            🔥 {emChamas.length} jogadora(s) fecham com status
+            🔥 {emChamas.length === 1 ? 'Uma jogadora fecha' : `${emChamas.length} jogadoras fecham`} com status
           </div>
           <div className="stack">
             {emChamas.map((f) => {

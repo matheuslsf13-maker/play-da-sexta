@@ -13,10 +13,13 @@ type Resultado = { criados: string[]; apelidos: { playerId: string; alias: strin
  */
 export default function ImportarLista({
   onAplicar,
+  modo = 'play',
   onClose,
   onToast,
 }: {
-  onAplicar: (playerIds: string[]) => void
+  onAplicar?: (playerIds: string[]) => void
+  /** `play` marca presenca; `cadastro` so cria quem falta, na aba Meninas. */
+  modo?: 'play' | 'cadastro'
   onClose: () => void
   onToast: (m: string) => void
 }) {
@@ -74,7 +77,7 @@ export default function ImportarLista({
         criados.push(nova.id)
       }
     }
-    onAplicar(escolhidas)
+    onAplicar?.(escolhidas)
     setFeito({ criados, apelidos })
   }
 
@@ -85,7 +88,7 @@ export default function ImportarLista({
       const p = data.players.find((x) => x.id === playerId)
       if (p) savePlayer({ ...p, aliases: (p.aliases ?? []).filter((a) => a !== alias) })
     }
-    onAplicar([])
+    onAplicar?.([])
     setFeito(null)
     setItens(null)
     onToast('Importação desfeita')
@@ -96,7 +99,11 @@ export default function ImportarLista({
     return (
       <Modal title="Lista importada" onClose={onClose}>
         <div className="banner info" style={{ marginTop: 0 }}>
-          ✅ <strong>{(itens ?? []).length} jogadoras</strong> marcadas para este play.
+          {modo === 'play' ? (
+            <>✅ <strong>{(itens ?? []).length} jogadoras</strong> marcadas para este play.</>
+          ) : (
+            <>✅ Conferi <strong>{(itens ?? []).length} nomes</strong> da lista.</>
+          )}
           {feito.criados.length > 0 && <> {feito.criados.length} foram criadas agora.</>}
           {feito.apelidos.length > 0 && <> {feito.apelidos.length} grafia(s) guardada(s) para a próxima vez.</>}
         </div>
@@ -202,7 +209,10 @@ export default function ImportarLista({
 
   /* --------------------------------------------------------- colar a lista */
   return (
-    <Modal title="Colar lista do grupo" onClose={onClose}>
+    <Modal
+      title={modo === 'play' ? 'Colar lista do grupo' : 'Cadastrar várias de uma vez'}
+      onClose={onClose}
+    >
       <p className="small muted" style={{ marginTop: 0 }}>
         Cole aqui a lista de confirmação do WhatsApp, do jeito que veio. Eu tiro a numeração e
         procuro cada nome na base de jogadoras.

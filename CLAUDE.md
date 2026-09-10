@@ -95,6 +95,17 @@ supabase/*.sql   migrações, rodadas na ordem numérica no SQL Editor
   mais** do que vencer quem está pior. Não é o ranking do mês (senão o primeiro
   play do mês sairia desequilibrado) e não é média de pontos, que não sabe de quem
   você ganhou — e por isso quebrava no modo em grupos.
+- **O empate no fim é configurável** (`sessions.desempate`, `src/lib/desempate.ts`).
+  São **três modos**, e o que muda é o que acontece no `alvo-1`x`alvo-1` (o 3x3):
+  `alvo` (quem chegar primeiro leva), `vantagem` (“só vai a 2”, sem teto) e
+  `vantagem-tie7`/`vantagem-tie10` (vai a 2 até o `alvo`x`alvo`, e dali um tie
+  decide — o **único modo com teto**). **O tie sempre vai a 2** (7x5 vale, 7x6
+  não): é regra, não pergunta. **Só a vantagem muda o que dá para lançar**, porque
+  é a única em que a vencedora passa do alvo; com tie o placar em games não muda.
+- **Colar a lista do grupo** (`ImportarLista`) serve **duas** telas, pelo `modo`:
+  em `play` marca presença; em `cadastro` (aba Meninas) só cria quem falta. E os
+  **ícones da lista do WhatsApp são descartados** (`ICONES`, em `roster.ts`) — saem
+  **antes** da numeração, senão um “✅ 3 - Bia” esconde o “3 -”.
 - **Play avulso** (`sessions.ranked = false`): conta no histórico e na força,
   mas **não soma no ranking do mês nem mexe nas sequências**. Serve para o jogo
   fora de calendário que não é o campeonato.
@@ -106,6 +117,21 @@ supabase/*.sql   migrações, rodadas na ordem numérica no SQL Editor
 - **O placar só é lançável depois de "▶️ Partida iniciada"** (botões de "venceu"
   desabilitados). Corrigir placar é o ✏️ da lista "Já jogadas", que abre um modal
   e **preserva o `ended_at`** — não devolve a partida para a fila.
+
+## A tela é um celular na beira da quadra
+
+- **A ordem de criar o play** é quem joga → **formato** → detalhes. O formato é a
+  escolha que muda tudo o que vem depois, então tem cartão próprio logo abaixo das
+  participantes, como **lista vertical** (nomes longos num `segmented` quebram no
+  meio das palavras a 375px).
+- `.field > span` vale para `label` **e** `div`. Enquanto só `label.field > span`
+  tinha estilo, metade do formulário saia com rótulo pequeno em caixa alta e a
+  outra metade com texto corrido do corpo.
+- **Nome de pessoa não quebra no meio**: o `span` de cada jogadora é `nowrap` e
+  carrega o `+` da frente, então a linha só parte entre os dois nomes da dupla.
+- **Separador entre links é desenhado (`::before`), não digitado**: como texto, o
+  `·` conta como palavra e vai parar sozinho no fim da linha.
+- **Nada de `(s)`**: use `plural()` de `src/lib/types.ts`.
 
 ## Convenções
 

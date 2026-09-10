@@ -46,6 +46,14 @@ export type PlaySession = {
   /** No modo em grupos, quem esta em cada grupo (o grupo 1 e o de nivel mais alto). */
   groups?: string[][] | null
   /**
+   * O que fazer quando as duas duplas chegam em `target - 1` (o 3x3):
+   * `nenhum`, `vantagem` (vai a 2), `vantagem-tie7` ou `vantagem-tie10`.
+   * Ver `src/lib/desempate.ts`. Ausente = `nenhum`, como os plays antigos.
+   */
+  desempate?: string | null
+  /** Historico: hoje o tie sempre vai a 2, entao isto e sempre `true`. */
+  desempate_vai2?: boolean | null
+  /**
    * O play vale para o campeonato? `false` = play avulso: as partidas contam
    * no historico e no equilibrio das duplas, mas nao somam pontos no ranking
    * do mes nem mexem nas sequencias. Ausente conta como `true` (plays antigos).

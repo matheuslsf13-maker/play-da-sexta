@@ -1,17 +1,19 @@
 import { useMemo, useRef, useState } from 'react'
 import { Avatar, Empty, Modal } from '../components/ui'
+import ImportarLista from '../components/ImportarLista'
 import { rankingDeForca } from '../lib/forca'
 import { squareThumb } from '../lib/image'
 import { playedMatches } from '../lib/stats'
 import { useStore } from '../lib/store'
 import { jogadorasDaPartida } from '../lib/pairing'
-import { uid, type Player } from '../lib/types'
+import { plural, uid, type Player } from '../lib/types'
 
 export default function Players({ onToast }: { onToast: (m: string) => void }) {
   const { data, savePlayer, deletePlayer, mergePlayers, canEdit, repo } = useStore()
   const [name, setName] = useState('')
   const [busy, setBusy] = useState<string | null>(null)
   const [juntando, setJuntando] = useState<Player | null>(null)
+  const [importando, setImportando] = useState(false)
   const [editando, setEditando] = useState<Player | null>(null)
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -93,7 +95,23 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
             />
             <button className="btn pink" onClick={() => void add()} disabled={!name.trim()}>Add</button>
           </div>
+
+          <button
+            className="btn ghost block sm"
+            style={{ marginTop: 12 }}
+            onClick={() => setImportando(true)}
+          >
+            📋 Colar a lista do grupo e cadastrar várias
+          </button>
         </div>
+      )}
+
+      {importando && (
+        <ImportarLista
+          modo="cadastro"
+          onClose={() => setImportando(false)}
+          onToast={onToast}
+        />
       )}
 
       {editando && (
@@ -127,7 +145,8 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
         ) : (
           <div className="stack">
             {sorted.map((p) => (
-              <div key={p.id} className="row" style={{ opacity: p.active ? 1 : 0.5 }}>
+              <div key={p.id} className="atleta-linha" style={{ opacity: p.active ? 1 : 0.5 }}>
+                <div className="row">
                 <button
                   className="avatar"
                   title="Trocar foto"
@@ -163,25 +182,22 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                       </div>
                     )
                   })()}
-                  <div className="tiny muted">
+                  <div className="tiny muted acoes-atleta">
                     {busy === p.id ? (
                       'salvando foto…'
                     ) : (
                       <>
-                        {p.active ? 'ativa' : 'inativa'}
+                        {!p.active && <span className="pausada">pausada</span>}
                         {canEdit && (
                           <>
-                            {' · '}
                             <button className="linkish" onClick={() => setEditando(p)}>
                               editar perfil
                             </button>
-                            {' · '}
                             <button className="linkish" onClick={() => fileRefs.current[p.id]?.click()}>
                               {p.photo_url ? 'trocar foto' : 'pôr foto'}
                             </button>
                             {p.photo_url && (
                               <>
-                                {' · '}
                                 <button className="linkish" onClick={() => void removePhoto(p)}>
                                   remover foto
                                 </button>
@@ -193,8 +209,11 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                     )}
                   </div>
                 </div>
+                </div>
+
                 {canEdit && (
-                  <>
+                  <div className="row spread atleta-acoes">
+                    <div className="row" style={{ gap: 6 }}>
                     <button className="btn ghost sm" onClick={() => void savePlayer({ ...p, active: !p.active })}>
                       {p.active ? 'Pausar' : 'Ativar'}
                     </button>
@@ -211,7 +230,8 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                     >
                       🗑
                     </button>
-                  </>
+                    </div>
+                  </div>
                 )}
               </div>
             ))}
@@ -251,7 +271,7 @@ function JuntarJogadoras({
     <Modal title={`Juntar ${origem.name}`} onClose={onClose}>
       <p className="small muted" style={{ marginTop: 0 }}>
         Use quando a mesma atleta foi criada duas vezes com nomes diferentes.
-        As <strong>{jogos} partida(s)</strong> de {origem.name} passam para a jogadora escolhida,
+        As <strong>{plural(jogos, 'partida')}</strong> de {origem.name} passam para a jogadora escolhida,
         somando pontos e mantendo a sequência dela. Depois disso, <strong>{origem.name}</strong> deixa de existir.
       </p>
       <label className="field">
@@ -383,8 +403,8 @@ function EditarPerfil({
       </p>
 
       <div className="banner info" style={{ marginTop: 12 }}>
-        📚 <strong>{historico.partidas} partida(s)</strong> em{' '}
-        <strong>{historico.dias} play(s)</strong> no histórico dela. Trocar o nome{' '}
+        📚 <strong>{plural(historico.partidas, 'partida')}</strong> em{' '}
+        <strong>{plural(historico.dias, 'play')}</strong> no histórico dela. Trocar o nome{' '}
         <strong>não mexe em nada disso</strong>: as partidas ficam ligadas ao cadastro, não ao nome
         escrito.
       </div>

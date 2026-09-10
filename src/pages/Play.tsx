@@ -28,12 +28,39 @@ import {
   rankPlayers,
 } from '../lib/stats'
 import { buildDayPoster, buildDayPosterGrupos, type PosterRow } from '../lib/poster'
+import {
+  MODOS,
+  REGRA_PADRAO,
+  TIES,
+  escreverRegra,
+  explicarRegra,
+  gamesDoPerdedor,
+  gamesDoVencedor,
+  lerRegra,
+  type Modo,
+  type Regra,
+  type Tie,
+} from '../lib/desempate'
 import { ajusteDeEntrosamento } from '../lib/forca'
 import { computeStreaks, podiosDoDia, streakLevel, vagasDoPodio } from '../lib/streaks'
 import { useWakeLock } from '../lib/wakelock'
 import { useStore } from '../lib/store'
-import { dateLabel, todayISO, uid, type Match, type PlayFormat, type PlaySession } from '../lib/types'
+import { dateLabel, plural, todayISO, uid, type Match, type PlayFormat, type PlaySession } from '../lib/types'
 import { RankTable } from './Ranking'
+
+/** Os formatos, na ordem em que fazem sentido escolher. */
+const FORMATOS: { valor: PlayFormat; rotulo: string; explica: string }[] = [
+  {
+    valor: 'todas',
+    rotulo: '🔁 Todas com todas',
+    explica: 'cada uma faz dupla com cada uma das outras, exatamente uma vez',
+  },
+  {
+    valor: 'grupos',
+    rotulo: '👥 Em grupos',
+    explica: 'o mesmo rodízio dentro de cada grupo, e cada grupo tem o seu pódio',
+  },
+]
 
 export default function Play({
   onToast,
@@ -168,7 +195,7 @@ function ConfirmarExclusao({ session, onClose }: { session: PlaySession; onClose
       <div className="banner err" style={{ marginTop: 0 }}>
         <strong>{session.title}</strong> — {dateLabel(session.date)}
         <br />
-        Isso apaga <strong>{jogadas.length} partida(s) já jogada(s)</strong> e não tem como desfazer.
+        Isso apaga <strong>{plural(jogadas.length, 'partida já jogada', 'partidas já jogadas')}</strong> e não tem como desfazer.
       </div>
 
       {perdas.length > 0 && (
@@ -186,7 +213,7 @@ function ConfirmarExclusao({ session, onClose }: { session: PlaySession; onClose
               </div>
             ))}
             {perdas.length > 5 && (
-              <div className="tiny muted">e mais {perdas.length - 5} jogadora(s).</div>
+              <div className="tiny muted">e mais {plural(perdas.length - 5, 'jogadora')}.</div>
             )}
           </div>
         </>
@@ -215,7 +242,7 @@ function ConfirmarExclusao({ session, onClose }: { session: PlaySession; onClose
         disabled={texto.trim().toUpperCase() !== PALAVRA}
         onClick={() => { void deleteSession(session.id); onClose() }}
       >
-        🗑 Apagar o play e os {jogadas.length} resultado(s)
+        🗑 Apagar o play e {plural(jogadas.length, 'o resultado', 'os resultados')}
       </button>
       <button className="btn ghost block sm" style={{ marginTop: 8 }} onClick={onClose}>
         Cancelar
@@ -246,6 +273,9 @@ function NewPlay({
   const [ranked, setRanked] = useState(preset.ranked ?? true)
   const [importando, setImportando] = useState(false)
   const [target, setTarget] = useState(preset.target ?? 4)
+  const [regra, setRegra] = useState<Regra>(
+    preset.desempate ? lerRegra(preset.desempate) : { ...REGRA_PADRAO },
+  )
   const [selected, setSelected] = useState<string[]>(preset.player_ids ?? [])
   const [busy, setBusy] = useState(false)
 
@@ -309,6 +339,9 @@ function NewPlay({
         courts: effCourts,
         rounds: fila.length, // a coluna se chama rounds; hoje e o total de partidas
         target,
+        desempate: escreverRegra(regra),
+        // o tie sempre vai a 2; a coluna fica no banco so por compatibilidade
+        desempate_vai2: true,
         player_ids: selected,
         status: 'open',
         created_at: new Date().toISOString(),
@@ -332,16 +365,84 @@ function NewPlay({
           <div className="section-title" style={{ margin: 0 }}>🎾 Novo Play</div>
           <button className="btn ghost sm" onClick={onCancel}>Cancelar</button>
         </div>
+        <div className="row spread">
+          <div className="section-title nowrap" style={{ margin: 0 }}>
+            👯 Quem joga ({selected.length})
+          </div>
+          <div className="row" style={{ gap: 6 }}>
+            <button className="btn ghost sm" onClick={() => setSelected(available.map((p) => p.id))}>Todas</button>
+            <button className="btn ghost sm" onClick={() => setSelected([])}>Limpar</button>
+          </div>
+        </div>
+        <button className="btn purple block sm" style={{ marginTop: 10 }} onClick={() => setImportando(true)}>
+          📋 Colar lista de confirmação do grupo
+        </button>
+
+        {available.length === 0 ? (
+          <Empty icon="👯">
+            Cadastre as jogadoras na aba <strong>Meninas</strong> — ou cole a lista do grupo no botão acima.
+          </Empty>
+        ) : (
+          <div className="grade-atletas">
+            {available.map((p) => {
+              const on = selected.includes(p.id)
+              return (
+                <button key={p.id} className={`chip ${on ? 'on' : 'off'}`} onClick={() => toggle(p.id)}>
+                  <Avatar player={playerById(p.id)} size={22} />
+                  <span className="nome-atleta">{p.nickname?.trim() || p.name}</span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {selected.length >= 4 && (
+          <div className="banner info" style={{ marginTop: 14, marginBottom: 0 }}>
+            Com <strong>{selected.length} jogadoras</strong> dá para usar <strong>{plural(effCourts, 'quadra')}</strong> ao mesmo tempo
+            {restPorVez > 0
+              ? ` (${restPorVez} esperam a vez${grupos.length > 1 ? ', revezando dentro do próprio grupo' : ''}, e entra sempre quem está fora há mais tempo)`
+              : ' (todas jogam ao mesmo tempo)'}.
+            {effCourts < courts && ' Ajustei o número de quadras para caber todo mundo.'}
+            <br />
+            Para equilibrar as duplas e dividir os grupos, o app não usa o ranking do mês:
+            usa uma nota própria em que <strong>vencer quem está jogando melhor vale mais</strong>{' '}
+            do que vencer quem está jogando pior. Ela se atualiza a cada partida, então quem
+            está em alta sobe de grupo sozinha — e a virada do mês não desequilibra nada.
+          </div>
+        )}
+      </div>
+
+      <div className="card">
+        <div className="section-title">🎾 Formato do play</div>
+        <div className="stack" style={{ gap: 8 }}>
+          {FORMATOS.map((f) => (
+            <button
+              key={f.valor}
+              className={`opcao${format === f.valor ? ' on' : ''}`}
+              onClick={() => setFormat(f.valor)}
+            >
+              <span className="opcao-marca">{format === f.valor ? '◉' : '○'}</span>
+              <span className="grow" style={{ minWidth: 0 }}>
+                <strong>{f.rotulo}</strong>
+                <span className="tiny muted">{f.explica}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="section-title">⚙️ Detalhes do play</div>
         <div className="stack" style={{ marginTop: 12 }}>
           <label className="field">
             <span>Nome do play</span>
             <input className="input" value={title} onChange={(e) => setTitle(e.target.value)} />
           </label>
-          <label className="field">
-            <span>Data</span>
-            <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
-          </label>
           <div className="grid2">
+            <label className="field">
+              <span>Data</span>
+              <input className="input" type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </label>
             <div className="field">
               <span>Quadras</span>
               <Stepper value={courts} min={1} max={12} onChange={setCourts} />
@@ -353,28 +454,49 @@ function NewPlay({
                     : 'quadras disponíveis hoje'}
               </em>
             </div>
-            <div className="field">
-              <span>Vai até</span>
-              <Stepper value={target} min={1} max={21} onChange={setTarget} />
-              <em className="hint">pontos para vencer a partida — o padrão é 4</em>
-            </div>
           </div>
 
           <div className="field">
-            <span>Formato</span>
-            <div className="segmented">
-              <button className={format === 'todas' ? 'on' : ''} onClick={() => setFormat('todas')}>
-                🔁 Todas com todas
-              </button>
-              <button className={format === 'grupos' ? 'on' : ''} onClick={() => setFormat('grupos')}>
-                👥 Em grupos
-              </button>
+            <span>Vai até</span>
+            <Stepper value={target} min={1} max={21} onChange={setTarget} />
+            <em className="hint">games para vencer a partida — o padrão é 4</em>
+          </div>
+
+          <div className="field">
+            <span>No {target - 1}x{target - 1}</span>
+            <div className="row wrap" style={{ gap: 6 }}>
+              {MODOS.map((d) => (
+                <button
+                  key={d.valor}
+                  className={`chip ${regra.modo === d.valor ? 'on' : 'off'}`}
+                  style={{ flex: 'none' }}
+                  onClick={() => setRegra((r) => ({ ...r, modo: d.valor as Modo }))}
+                >
+                  {d.rotulo}
+                </button>
+              ))}
             </div>
-            <em className="hint">
-              {format === 'todas'
-                ? 'cada menina faz dupla com cada uma das outras exatamente uma vez'
-                : 'o mesmo rodízio, mas dentro de cada grupo — os grupos saem por nível, os pontos continuam individuais, e cada grupo tem o seu pódio'}
-            </em>
+
+            {/* o tamanho do tie so importa quando existe tie */}
+            {regra.modo === 'vantagem-tie' && (
+              <>
+                <span style={{ marginTop: 12 }}>O tie do {target}x{target} é de</span>
+                <div className="row wrap" style={{ gap: 6 }}>
+                  {TIES.map((d) => (
+                    <button
+                      key={d.valor}
+                      className={`chip ${regra.tie === d.valor ? 'on' : 'off'}`}
+                      style={{ flex: 'none' }}
+                      onClick={() => setRegra((r) => ({ ...r, tie: d.valor as Tie }))}
+                    >
+                      {d.rotulo}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+
+            <em className="hint" style={{ marginTop: 6 }}>{explicarRegra(target, regra)}</em>
           </div>
 
           <div className={`toggle-card${ranked ? '' : ' avulso'}`}>
@@ -444,7 +566,8 @@ function NewPlay({
                 )}
               </>
             )}{' '}
-            Quem vence leva <strong>{target} menos os games da adversária</strong> em pontos.
+            Quem vence leva <strong>os games que fez menos os da adversária</strong> em pontos
+            (mínimo 1), e quem perde não pontua.
           </p>
 
           {selected.length >= 4 && effCourts < courts && travadoPorGrupo && (
@@ -457,7 +580,7 @@ function NewPlay({
                 : `${Math.floor(Math.min(...tamanhos) / 4)} quadras`}{' '}
               por vez — mesmo tendo {selected.length} jogadoras no total.
               <br />
-              Vou montar o play com <strong>{effCourts} quadra(s)</strong>, e{' '}
+              Vou montar o play com <strong>{plural(effCourts, 'quadra')}</strong>, e{' '}
               <strong>{restPorVez} ficam de fora</strong> por vez, revezando dentro do próprio
               grupo. Um grupo precisa de <strong>8 meninas para alimentar 2 quadras</strong>, 12
               para 3, e assim por diante — então, para usar as {courts}, aumente o tamanho do grupo.
@@ -473,14 +596,14 @@ function NewPlay({
                 ? 'falta 1 jogadora'
                 : `faltam ${courts * 4 - selected.length} jogadoras`}.
               <br />
-              Vou montar o play com <strong>{effCourts} quadra(s)</strong>
+              Vou montar o play com <strong>{plural(effCourts, 'quadra')}</strong>
               {restPorVez > 0 && <>, revezando quem fica de fora</>}.
             </div>
           )}
 
           {selected.length >= 4 && effCourts === courts && restPorVez === 0 && (
             <div className="banner warn" style={{ margin: '10px 0 0' }}>
-              🪑 Com <strong>{selected.length} jogadoras em {effCourts} quadra(s)</strong> todas
+              🪑 Com <strong>{selected.length} jogadoras em {plural(effCourts, 'quadra')}</strong> todas
               jogam ao mesmo tempo e <strong>ninguém fica de fora</strong> — nem para descansar.
               <br />
               {/* o motivo muda conforme o grupo alimenta uma quadra ou varias:
@@ -541,51 +664,6 @@ function NewPlay({
         </div>
       </div>
 
-      <div className="card">
-        <div className="row spread">
-          <div className="section-title" style={{ margin: 0 }}>👯 Quem vai jogar ({selected.length})</div>
-          <div className="row" style={{ gap: 6 }}>
-            <button className="btn ghost sm" onClick={() => setSelected(available.map((p) => p.id))}>Todas</button>
-            <button className="btn ghost sm" onClick={() => setSelected([])}>Limpar</button>
-          </div>
-        </div>
-        <button className="btn purple block sm" style={{ marginTop: 10 }} onClick={() => setImportando(true)}>
-          📋 Colar lista de confirmação do grupo
-        </button>
-
-        {available.length === 0 ? (
-          <Empty icon="👯">
-            Cadastre as jogadoras na aba <strong>Meninas</strong> — ou cole a lista do grupo no botão acima.
-          </Empty>
-        ) : (
-          <div className="row wrap" style={{ gap: 8, marginTop: 10 }}>
-            {available.map((p) => {
-              const on = selected.includes(p.id)
-              return (
-                <button key={p.id} className={`chip ${on ? 'on' : 'off'}`} onClick={() => toggle(p.id)}>
-                  <Avatar player={playerById(p.id)} size={22} />
-                  {p.name}
-                </button>
-              )
-            })}
-          </div>
-        )}
-
-        {selected.length >= 4 && (
-          <div className="banner info" style={{ marginTop: 14, marginBottom: 0 }}>
-            Com <strong>{selected.length} jogadoras</strong> dá para usar <strong>{effCourts} quadra(s)</strong> ao mesmo tempo
-            {restPorVez > 0
-              ? ` (${restPorVez} esperam a vez${grupos.length > 1 ? ', revezando dentro do próprio grupo' : ''}, e entra sempre quem está fora há mais tempo)`
-              : ' (todas jogam ao mesmo tempo)'}.
-            {effCourts < courts && ' Ajustei o número de quadras para caber todo mundo.'}
-            <br />
-            Para equilibrar as duplas e dividir os grupos, o app não usa o ranking do mês:
-            usa uma nota própria em que <strong>vencer quem está jogando melhor vale mais</strong>{' '}
-            do que vencer quem está jogando pior. Ela se atualiza a cada partida, então quem
-            está em alta sobe de grupo sozinha — e a virada do mês não desequilibra nada.
-          </div>
-        )}
-      </div>
 
       {importando && (
         <ImportarLista
@@ -669,6 +747,8 @@ function PlayDetail({
   const [manuais, setManuais] = useState<Record<number, string>>({})
   const [escolhendo, setEscolhendo] = useState<number | null>(null)
   const [corrigindo, setCorrigindo] = useState<Match | null>(null)
+  /** A regra do empate deste play. Plays antigos nao tem: e `nenhum`. */
+  const regraDoPlay = lerRegra(session.desempate)
 
   const matches = useMemo(
     () =>
@@ -1048,7 +1128,7 @@ function PlayDetail({
     }))
     await replaceSessionMatches(session.id, [...preservadas, ...novas])
     await saveSession({ ...session, rounds: preservadas.length + novas.length })
-    onToast(`${novas.length} partida(s) refeita(s) 🔄`)
+    onToast(`${novas.length === 1 ? 'uma partida refeita' : `${novas.length} partidas refeitas`} 🔄`)
   }
 
   async function regenerate() {
@@ -1093,7 +1173,10 @@ function PlayDetail({
           <div style={{ fontSize: 19, fontWeight: 800 }}>{session.title}</div>
           <div className="small muted">
             {dateLabel(session.date)} · {session.player_ids.length} jogadoras · {session.courts} quadras
-            {grupos && grupos.length > 1 && ` · ${grupos.length} grupos`} · até {session.target} pontos
+            {grupos && grupos.length > 1 && ` · ${grupos.length} grupos`} · até {session.target} games
+          </div>
+          <div className="tiny muted" style={{ marginTop: 2 }}>
+            {explicarRegra(session.target, regraDoPlay)}
           </div>
         </div>
         <div className="grid3" style={{ marginTop: 12 }}>
@@ -1173,6 +1256,7 @@ function PlayDetail({
                 match={m}
                 quadra={q}
                 target={session.target}
+                desempate={regraDoPlay}
                 editable={editable}
                 iniciada={!!atual}
                 inicio={inicioDe(m)}
@@ -1248,6 +1332,7 @@ function PlayDetail({
         <CorrigirPlacar
           match={corrigindo}
           target={session.target}
+          desempate={regraDoPlay}
           onClose={() => setCorrigindo(null)}
           onScore={(a, b) => { setScore(corrigindo, a, b); setCorrigindo(null) }}
         />
@@ -1504,7 +1589,7 @@ function Duo({ ids, ocupadas }: { ids: [string, string]; ocupadas?: Set<string> 
         {ids.map((id, i) => (
           <span key={id}>
             {i > 0 && <span className="muted"> + </span>}
-            <span className={ocupadas?.has(id) ? 'ocupada' : undefined}>
+            <span className={`nowrap${ocupadas?.has(id) ? ' ocupada' : ''}`}>
               {nameOf(id)}
               {ocupadas?.has(id) && ' ⏳'}
             </span>
@@ -1519,6 +1604,7 @@ function MatchCard({
   match,
   quadra,
   target,
+  desempate,
   editable,
   iniciada,
   inicio,
@@ -1538,6 +1624,7 @@ function MatchCard({
   match: Match
   quadra: number
   target: number
+  desempate: Regra
   editable: boolean
   iniciada: boolean
   inicio: string | null
@@ -1613,23 +1700,29 @@ function MatchCard({
         </div>
         <div className="team win">
           <Duo ids={winner === 'a' ? match.team_a : match.team_b} />
-          <span className="score-box">{target}</span>
+          <span className="score-box">
+            {desempate.modo !== 'alvo' && !desempate.tieDireto ? `${target}+` : target}
+          </span>
         </div>
         <div className="ask">Quantos games <strong>{nameOf(loserIds[0])} + {nameOf(loserIds[1])}</strong> fez?</div>
         <div className="games-row">
-          {Array.from({ length: target }, (_, n) => (
-            <button
-              key={n}
-              className="game-btn"
-              onClick={() => {
-                setWinner(null)
-                if (winner === 'a') onScore(match, target, n)
-                else onScore(match, n, target)
-              }}
-            >
-              {n}
-            </button>
-          ))}
+          {gamesDoPerdedor(target, desempate).map((n) => {
+            const venceu = gamesDoVencedor(target, desempate, n)
+            return (
+              <button
+                key={n}
+                className="game-btn"
+                title={`${venceu}x${n}`}
+                onClick={() => {
+                  setWinner(null)
+                  if (winner === 'a') onScore(match, venceu, n)
+                  else onScore(match, n, venceu)
+                }}
+              >
+                {venceu === target ? n : `${venceu}x${n}`}
+              </button>
+            )
+          })}
         </div>
       </div>
     )
@@ -1813,11 +1906,13 @@ function ListaDePartidas({
 function CorrigirPlacar({
   match,
   target,
+  desempate,
   onScore,
   onClose,
 }: {
   match: Match
   target: number
+  desempate: Regra
   onScore: (a: number | null, b: number | null) => void
   onClose: () => void
 }) {
@@ -1835,15 +1930,19 @@ function CorrigirPlacar({
           <strong>{nameOf(perdedoras[0])} + {nameOf(perdedoras[1])}</strong>
         </div>
         <div className="games-row">
-          {Array.from({ length: target }, (_, n) => (
-            <button
-              key={n}
-              className="game-btn"
-              onClick={() => (winner === 'a' ? onScore(target, n) : onScore(n, target))}
-            >
-              {n}
-            </button>
-          ))}
+          {gamesDoPerdedor(target, desempate).map((n) => {
+            const venceu = gamesDoVencedor(target, desempate, n)
+            return (
+              <button
+                key={n}
+                className="game-btn"
+                title={`${venceu}x${n}`}
+                onClick={() => (winner === 'a' ? onScore(venceu, n) : onScore(n, venceu))}
+              >
+                {venceu === target ? n : `${venceu}x${n}`}
+              </button>
+            )
+          })}
         </div>
       </Modal>
     )
