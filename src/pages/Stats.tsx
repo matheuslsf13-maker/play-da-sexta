@@ -14,12 +14,22 @@ import {
   type DuoStat,
   type PairKeyStat,
 } from '../lib/stats'
+import {
+  JOGOS_PARA_ENTROSAMENTO,
+  JOGOS_PARA_FIRMAR,
+  NIVEIS_DE_FORCA,
+  forcaDeDuplas,
+  nivelDeForca,
+  rankingDeForca,
+  type ForcaDeDupla,
+  type LinhaDeForca,
+} from '../lib/forca'
 import { matchPoints } from '../lib/scoring'
 import { applyBonuses, computeStreaks, streakLevel, streakValue } from '../lib/streaks'
 import { useStore } from '../lib/store'
-import { dateLabel, monthLabel, monthOf } from '../lib/types'
+import { dateLabel, monthLabel, monthOf, plural } from '../lib/types'
 
-type Modo = 'jogadora' | 'duplas'
+type Modo = 'jogadora' | 'duplas' | 'forca'
 
 export default function Stats() {
   const { data } = useStore()
@@ -64,12 +74,16 @@ export default function Stats() {
       <div className="card">
         <div className="segmented">
           <button className={modo === 'jogadora' ? 'on' : ''} onClick={() => setModo('jogadora')}>
-            👤 Por jogadora
+            👤 Jogadora
           </button>
           <button className={modo === 'duplas' ? 'on' : ''} onClick={() => setModo('duplas')}>
-            🤝 Por dupla
+            🤝 Dupla
+          </button>
+          <button className={modo === 'forca' ? 'on' : ''} onClick={() => setModo('forca')}>
+            💪 Força
           </button>
         </div>
+        {modo !== 'forca' && (
         <label className="field" style={{ marginTop: 12 }}>
           <span>Período</span>
           <select className="select" value={period} onChange={(e) => setPeriod(e.target.value)}>
@@ -87,9 +101,12 @@ export default function Stats() {
             própria, em que <strong>vencer quem está jogando melhor vale mais</strong>.
           </em>
         </label>
+        )}
       </div>
 
-      {modo === 'jogadora' ? (
+      {modo === 'forca' ? (
+        <PainelForca />
+      ) : modo === 'jogadora' ? (
         <PainelJogadora
           selected={selected}
           setPlayerId={setPlayerId}
@@ -123,6 +140,14 @@ function PainelJogadora({
   period: string
 }) {
   const { data, nameOf, playerById } = useStore()
+
+  // a forca e sempre do historico inteiro, mesmo com o periodo filtrado: ela
+  // nao e desempenho do mes, e o que o app aprendeu sobre a jogadora ate hoje
+  const forcas = useMemo(() => rankingDeForca(data, nameOf), [data, nameOf])
+  const posicaoNaForca = forcas.findIndex((l) => l.player_id === selected) + 1
+  const minhaForca = posicaoNaForca > 0 ? forcas[posicaoNaForca - 1] : null
+  const totalNaForca = forcas.length
+
   const partners = useMemo(() => partnerStats(matches), [matches])
   const opponents = useMemo(() => opponentStats(matches), [matches])
 
@@ -185,6 +210,35 @@ function PainelJogadora({
       </div>
 
       <div className="card">
+        <div className="section-title">💪 Força</div>
+        {minhaForca ? (
+          <>
+            <div className="row" style={{ gap: 10 }}>
+              <span style={{ fontSize: 26 }}>{minhaForca.nivel.emoji}</span>
+              <div className="grow" style={{ minWidth: 0 }}>
+                <div style={{ fontWeight: 800, color: minhaForca.nivel.cor }}>
+                  {minhaForca.nivel.titulo}
+                </div>
+                <div className="tiny muted">
+                  {posicaoNaForca}ª mais forte de {totalNaForca}
+                  {minhaForca.provisoria && ' · nota provisória'}
+                </div>
+              </div>
+              <span style={{ fontSize: 24, fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+                {minhaForca.nota}
+              </span>
+            </div>
+            <p className="tiny muted" style={{ marginBottom: 0, marginTop: 8 }}>
+              Não é o ranking do mês: a força atravessa o ano e mede <strong>de quem</strong>{' '}
+              você ganhou. É ela que monta os grupos e escolhe as duplas. 1500 é a média do grupo.
+            </p>
+          </>
+        ) : (
+          <p className="tiny muted" style={{ margin: 0 }}>Ainda sem partidas para medir.</p>
+        )}
+      </div>
+
+      <div className="card">
         <div className="section-title">🔥 Sequência e status</div>
         <div className="grid3">
           <StatBox k="Sequência" v={seq} />
@@ -241,7 +295,7 @@ function PainelJogadora({
 
 /* ---------------------------------------------------------- por dupla */
 
-type Ordem = 'jogos' | 'aproveitamento' | 'pontos'
+type Ordem = 'jogos' | 'aproveitamento' | 'pontos' | 'forca'
 
 function PainelDuplas({ matches }: { matches: ReturnType<typeof playedMatches> }) {
   const { nameOf, playerById } = useStore()
@@ -251,6 +305,12 @@ function PainelDuplas({ matches }: { matches: ReturnType<typeof playedMatches> }
 
   const duplas = useMemo(() => [...duoStats(matches).values()], [matches])
 
+  // a forca sai do historico INTEIRO da dupla, e nao do periodo filtrado:
+  // e o que as duas renderam juntas desde sempre
+  const { data } = useStore()
+  const forcas = useMemo(() => forcaDeDuplas(data), [data])
+  const forcaDe = (d: DuoStat) => forcas.get(d.key)?.nota ?? 1500
+
   const lista = useMemo(() => {
     const termo = busca.trim().toLowerCase()
     const filtradas = termo
@@ -258,6 +318,7 @@ function PainelDuplas({ matches }: { matches: ReturnType<typeof playedMatches> }
       : duplas
     const aprov = (d: DuoStat) => (d.matches === 0 ? 0 : d.wins / d.matches)
     return [...filtradas].sort((a, b) => {
+      if (ordem === 'forca') return forcaDe(b) - forcaDe(a) || b.matches - a.matches
       if (ordem === 'pontos') return b.points - a.points || b.matches - a.matches
       if (ordem === 'aproveitamento') return aprov(b) - aprov(a) || b.matches - a.matches
       return b.matches - a.matches || b.wins - a.wins
@@ -282,10 +343,15 @@ function PainelDuplas({ matches }: { matches: ReturnType<typeof playedMatches> }
           value={busca}
           onChange={(e) => setBusca(e.target.value)}
         />
-        <div className="row" style={{ gap: 6, marginTop: 10 }}>
-          {([['jogos', 'Mais jogos'], ['aproveitamento', 'Melhor %'], ['pontos', 'Mais pontos']] as [Ordem, string][]).map(
+        <div className="chips-scroll" style={{ marginTop: 10 }}>
+          {([['jogos', 'Mais jogos'], ['aproveitamento', 'Melhor %'], ['pontos', 'Mais pontos'], ['forca', '💪 Mais fortes']] as [Ordem, string][]).map(
             ([id, txt]) => (
-              <button key={id} className={`chip ${ordem === id ? 'on' : 'off'}`} onClick={() => setOrdem(id)}>
+              <button
+                key={id}
+                className={`chip ${ordem === id ? 'on' : 'off'}`}
+                style={{ flex: 'none' }}
+                onClick={() => setOrdem(id)}
+              >
                 {txt}
               </button>
             ),
@@ -309,7 +375,8 @@ function PainelDuplas({ matches }: { matches: ReturnType<typeof playedMatches> }
                   <span className="grow" style={{ minWidth: 0 }}>
                     <span className="duo-nomes ellipsis">{nameOf(d.a)} + {nameOf(d.b)}</span>
                     <span className="mini-barra"><i style={{ width: `${Math.round(pct * 100)}%` }} /></span>
-                    <span className="tiny muted">{d.matches} jogo(s) · {d.wins}V {d.losses}D · {d.points} pts</span>
+                    <span className="tiny muted">{plural(d.matches, 'jogo')} · {d.wins}V {d.losses}D · {d.points} pts</span>
+                    <ForcaDaDupla f={forcas.get(d.key)} />
                   </span>
                   <span className="duo-pct">{Math.round(pct * 100)}%</span>
                 </button>
@@ -339,6 +406,7 @@ function DetalheDupla({
   onClose: () => void
 }) {
   const { data, nameOf, playerById } = useStore()
+  const forca = useMemo(() => forcaDeDuplas(data).get(duo.key), [data, duo.key])
   const jogos = useMemo(() => duoMatches(matches, duo.a, duo.b), [matches, duo])
   const dataDaSessao = new Map(data.sessions.map((s) => [s.id, s.date]))
   const pct = duo.matches === 0 ? 0 : duo.wins / duo.matches
@@ -373,6 +441,34 @@ function DetalheDupla({
         <StatBox k="Games" v={`${duo.gamesWon}/${duo.gamesLost}`} />
         <StatBox k="Plays" v={duo.sessions.size} />
       </div>
+
+      {forca && (
+        <div className="card" style={{ marginTop: 12, marginBottom: 0 }}>
+          <div className="row" style={{ gap: 10 }}>
+            <span style={{ fontSize: 24 }}>{nivelDeForca(forca.nota).emoji}</span>
+            <div className="grow" style={{ minWidth: 0 }}>
+              <div style={{ fontWeight: 800, color: nivelDeForca(forca.nota).cor }}>
+                Força da dupla: {forca.nota}
+              </div>
+              <div className="tiny muted">
+                {forca.entrosamento === 0
+                  ? 'exatamente o que a força das duas previa'
+                  : forca.entrosamento > 0
+                    ? `+${forca.entrosamento} além do que a força das duas previa`
+                    : `${forca.entrosamento} abaixo do que a força das duas previa`}
+                {forca.provisoria && ' · provisória'}
+              </div>
+            </div>
+          </div>
+          <p className="tiny muted" style={{ marginTop: 8, marginBottom: 0 }}>
+            A média das duas dá <strong>{forca.base}</strong> — é o que a dupla deveria valer.
+            O número acima é o que ela vale <strong>pelo que renderam juntas</strong>: cada partida
+            delas move essa nota conforme o resultado e a força de quem estava do outro lado.
+            {forca.provisoria &&
+              ` Com menos de ${JOGOS_PARA_ENTROSAMENTO} jogos juntas, ainda é cedo para tirar conclusão.`}
+          </p>
+        </div>
+      )}
 
       <div className="section-title" style={{ marginTop: 16 }}>⚔️ Contra quem jogaram</div>
       <div className="scroll-x">
@@ -451,7 +547,7 @@ function Destaque({
   if (!par) return null
   const detalhe =
     tipo === 'parceira'
-      ? `${par.wins}V/${par.losses}D em ${par.matches} jogo(s) · ${par.points} pts juntas`
+      ? `${par.wins}V/${par.losses}D em ${plural(par.matches, 'jogo')} · ${par.points} pts juntas`
       : `${par.wins}V/${par.losses}D em ${par.matches} confronto(s)`
   return (
     <div className="row">
@@ -496,6 +592,142 @@ function TabelaPares({ linhas, primeira }: { linhas: PairKeyStat[]; primeira: st
           ))}
         </tbody>
       </table>
+    </div>
+  )
+}
+
+
+/** A forca da dupla na linha da lista: nivel, nota e o entrosamento. */
+function ForcaDaDupla({ f }: { f?: ForcaDeDupla }) {
+  if (!f) return null
+  const n = nivelDeForca(f.nota)
+  return (
+    <span className="tiny nowrap" style={{ display: 'block', marginTop: 2 }}>
+      <span style={{ color: n.cor, fontWeight: 800 }}>{n.emoji} força {f.nota}</span>
+      {f.entrosamento !== 0 && (
+        <span className="muted">
+          {' '}
+          ({f.entrosamento > 0 ? '+' : ''}
+          {f.entrosamento} juntas{f.provisoria ? '?' : ''})
+        </span>
+      )}
+    </span>
+  )
+}
+
+/**
+ * O ranking de forca do grupo.
+ *
+ * De proposito sem seletor de periodo: forca nao e desempenho do mes, e o que
+ * o app aprendeu sobre a jogadora desde sempre. Filtrar por mes daria um
+ * numero que nao e usado para nada -- o equilibrio das duplas le o total.
+ */
+function PainelForca() {
+  const { data, nameOf, playerById } = useStore()
+  const linhas = useMemo(() => rankingDeForca(data, nameOf), [data, nameOf])
+
+  if (linhas.length === 0) {
+    return (
+      <div className="card">
+        <Empty icon="💪">Registre um play para o app começar a medir a força de cada uma.</Empty>
+      </div>
+    )
+  }
+
+  const maior = Math.max(...linhas.map((l) => Math.abs(l.nota - 1500)), 60)
+
+  return (
+    <>
+      <div className="card">
+        <div className="section-title">💪 Força de cada jogadora</div>
+        <p className="tiny muted" style={{ marginTop: 0 }}>
+          Esta é a nota que o app já usava por baixo do pano para montar os grupos e escolher as
+          duplas — agora à vista. <strong>Não é o ranking do mês.</strong> O ranking soma pontos e
+          zera todo mês; a força atravessa o ano e mede <strong>de quem</strong> você ganhou:
+          vencer quem está melhor rende muito mais, e vencer apertado rende pouco. 1500 é a média
+          do grupo, e ela não se move — o que uma ganha, a outra perde.
+        </p>
+
+        <div className="stack" style={{ gap: 10 }}>
+          {linhas.map((l, i) => (
+            <LinhaDaForca key={l.player_id} linha={l} pos={i + 1} maior={maior} nome={nameOf(l.player_id)} foto={playerById(l.player_id)} />
+          ))}
+        </div>
+      </div>
+
+      <div className="card">
+        <div className="section-title">📏 O que cada nível quer dizer</div>
+        <div className="stack" style={{ gap: 6 }}>
+          {NIVEIS_DE_FORCA.map((n) => (
+            <div key={n.titulo} className="row" style={{ gap: 8 }}>
+              <span style={{ width: 28, textAlign: 'center' }}>{n.emoji}</span>
+              <strong style={{ color: n.cor, minWidth: 130 }}>{n.titulo}</strong>
+              <span className="tiny muted">
+                {n.de === -Infinity
+                  ? 'abaixo de 1425'
+                  : n.de >= 0
+                    ? `de ${1500 + n.de} para cima`
+                    : `a partir de ${1500 + n.de}`}
+              </span>
+            </div>
+          ))}
+        </div>
+        <p className="tiny muted" style={{ marginBottom: 0 }}>
+          Com menos de {JOGOS_PARA_FIRMAR} partidas a nota aparece como <em>provisória</em>: uma
+          sexta ruim ainda mexe demais nela. Quem nunca jogou não entra na lista — a nota dela seria
+          exatamente a média, mas por falta de informação, não por equilíbrio.
+        </p>
+      </div>
+    </>
+  )
+}
+
+function LinhaDaForca({
+  linha,
+  pos,
+  maior,
+  nome,
+  foto,
+}: {
+  linha: LinhaDeForca
+  pos: number
+  maior: number
+  nome: string
+  foto: ReturnType<ReturnType<typeof useStore>['playerById']>
+}) {
+  const dif = linha.nota - 1500
+  // a barra sai do meio para os dois lados: forca e distancia da media, com sinal
+  const largura = (Math.abs(dif) / maior) * 50
+  return (
+    <div>
+      <div className="row" style={{ gap: 8 }}>
+        <span className={`rank-pos top${pos}`} style={{ fontWeight: 800, minWidth: 22 }}>{pos}</span>
+        <Avatar player={foto} size={28} />
+        <span className="grow ellipsis">{nome}</span>
+        <span className="nowrap tiny" style={{ color: linha.nivel.cor, fontWeight: 800 }}>
+          {linha.nivel.emoji} {linha.nivel.titulo}
+        </span>
+        <span className="nowrap" style={{ fontWeight: 800, fontVariantNumeric: 'tabular-nums' }}>
+          {linha.nota}
+        </span>
+      </div>
+      <div className="forca-trilho">
+        <div className="forca-meio" />
+        <div
+          className="forca-barra"
+          style={{
+            background: linha.nivel.cor,
+            left: dif >= 0 ? '50%' : `${50 - largura}%`,
+            width: `${Math.max(largura, 1)}%`,
+          }}
+        />
+      </div>
+      <div className="tiny muted">
+        {linha.jogos} {linha.jogos === 1 ? 'partida' : 'partidas'}
+        {linha.provisoria && ' · nota provisória'}
+        {' · '}
+        {dif === 0 ? 'exatamente na média' : dif > 0 ? `+${dif} sobre a média` : `${dif} da média`}
+      </div>
     </div>
   )
 }

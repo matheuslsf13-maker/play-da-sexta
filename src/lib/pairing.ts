@@ -161,18 +161,33 @@ type Confrontos = Map<string, number>
 
 type Contexto = {
   ratings: Map<string, number>
+  /**
+   * Quanto cada dupla rende ALEM da media das duas, pelo historico dela
+   * (`pairKey` -> ajuste na mesma escala do `ratings`). Vazio quando a dupla
+   * ainda nao jogou junta o bastante.
+   */
+  entrosamento?: Map<string, number>
   /** Quantas vezes cada par ja se enfrentou hoje. */
   dia: Confrontos
   /** O mesmo, em plays anteriores, ja com o peso do historico. */
   antes: Confrontos
 }
 
-function forcaDuo(d: Duo, ratings: Map<string, number>): number {
-  return (ratings.get(d[0]) ?? 2) + (ratings.get(d[1]) ?? 2)
+/**
+ * A forca de uma dupla, para comparar com a do outro lado.
+ *
+ * E a SOMA das duas notas mais o entrosamento -- duas jogadoras medianas que
+ * se acham em quadra valem mais do que a soma diz, e e isso que faz o
+ * confronto sair parelho de verdade. O ajuste entra dobrado porque esta
+ * medido por jogadora e aqui a conta e de dupla.
+ */
+function forcaDuo(d: Duo, ctx: Contexto): number {
+  const base = (ctx.ratings.get(d[0]) ?? 2) + (ctx.ratings.get(d[1]) ?? 2)
+  return base + 2 * (ctx.entrosamento?.get(pairKey(d[0], d[1])) ?? 0)
 }
 
 function custoDoConfronto(a: Duo, b: Duo, ctx: Contexto): number {
-  let c = W_BALANCE * Math.abs(forcaDuo(a, ctx.ratings) - forcaDuo(b, ctx.ratings))
+  let c = W_BALANCE * Math.abs(forcaDuo(a, ctx) - forcaDuo(b, ctx))
   for (const x of a) {
     for (const y of b) {
       const k = pairKey(x, y)
@@ -466,7 +481,7 @@ function custoDoRodizio(partidas: Partida[], ctx: Contexto): number {
   const dia: Confrontos = new Map(ctx.dia)
   let c = 0
   for (const m of partidas) {
-    c += W_BALANCE * Math.abs(forcaDuo(m.team_a, ctx.ratings) - forcaDuo(m.team_b, ctx.ratings))
+    c += W_BALANCE * Math.abs(forcaDuo(m.team_a, ctx) - forcaDuo(m.team_b, ctx))
     for (const x of m.team_a) {
       for (const y of m.team_b) {
         const k = pairKey(x, y)
@@ -484,19 +499,20 @@ function rodizioDoGrupo(
   ratings: Map<string, number>,
   antes: Confrontos,
   diaAteAgora: Confrontos,
+  entrosamento?: Map<string, number>,
 ): Partida[] {
   if (ids.length < 4) return []
   let melhor: Partida[] = []
   let melhorCusto = Infinity
   for (let t = 0; t < 24; t++) {
     // cada tentativa comeca do mesmo ponto: os confrontos ja marcados fora
-    const ctx: Contexto = { ratings, antes, dia: new Map(diaAteAgora) }
+    const ctx: Contexto = { ratings, entrosamento, antes, dia: new Map(diaAteAgora) }
     const cand = umRodizio(ids, ctx)
     // ninguem jogar a mais que a outra vale mais que qualquer ajuste fino de
     // confronto: uma partida a mais para duas meninas e injustica visivel
     const custo =
       desigualdadeDeJogos(cand, ids) * 1e6 +
-      custoDoRodizio(cand, { ratings, antes, dia: diaAteAgora })
+      custoDoRodizio(cand, { ratings, entrosamento, antes, dia: diaAteAgora })
     if (custo < melhorCusto) {
       melhorCusto = custo
       melhor = cand
@@ -552,6 +568,8 @@ function ordenarFila(partidas: PlannedMatch[]): PlannedMatch[] {
 export type ScheduleOptions = {
   playerIds: string[]
   ratings: Map<string, number>
+  /** Entrosamento de cada dupla (`pairKey` -> ajuste), de `ajusteDeEntrosamento`. */
+  entrosamento?: Map<string, number>
   /** Historico de partidas anteriores (outros dias), para variar as duplas. */
   history?: History
   /** Peso do historico antigo em relacao ao do proprio dia (0 a 1). */
@@ -572,7 +590,7 @@ export function gerarFila(opts: ScheduleOptions): PlannedMatch[] {
   const grupos = opts.groups?.length ? opts.groups : [opts.playerIds]
   const todas: PlannedMatch[] = []
   grupos.forEach((ids, i) => {
-    for (const m of rodizioDoGrupo(ids, opts.ratings, antes, dia)) {
+    for (const m of rodizioDoGrupo(ids, opts.ratings, antes, dia, opts.entrosamento)) {
       todas.push({ ...m, grupo: i })
       marcarConfronto(m.team_a, m.team_b, dia)
     }
@@ -613,7 +631,7 @@ export function refazerFila(opts: RefazerOptions): PlannedMatch[] {
       }
     }
     if (faltando.length === 0) return
-    const ctx: Contexto = { ratings: opts.ratings, antes, dia }
+    const ctx: Contexto = { ratings: opts.ratings, entrosamento: opts.entrosamento, antes, dia }
     const { partidas, orfas } = emparelhar(shuffle(faltando), ctx)
     for (const orfa of orfas) {
       const rival = escolherRival(partidas, orfa, ctx)

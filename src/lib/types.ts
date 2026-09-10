@@ -141,3 +141,15 @@ export function dateLabel(dateISO: string): string {
   const [y, m, d] = dateISO.split('-')
   return `${d}/${m}/${y}`
 }
+
+/**
+ * "1 partida" / "3 partidas".
+ *
+ * O "(s)" entre parenteses e o jeito preguicoso de resolver plural, e aparece
+ * em texto que a organizadora le no meio do play. Quando o plural nao e so
+ * juntar um "s" (jogadora/jogadoras funciona; mulher/mulheres nao), passe o
+ * segundo argumento.
+ */
+export function plural(n: number, uma: string, varias?: string): string {
+  return `${n} ${n === 1 ? uma : (varias ?? uma + 's')}`
+}

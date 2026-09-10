@@ -70,6 +70,25 @@ supabase/*.sql   migrações, rodadas na ordem numérica no SQL Editor
 - **O mês fecha na mão**, no botão "🏁 Finalizar o mês" do Ranking (dá para
   reabrir). A premiação acontece no último play do mês, antes de o calendário
   virar.
+- **A força é visível** (`src/lib/forca.ts`, aba “💪 Força” em Stats, na ficha da
+  jogadora e na linha dela em Meninas). É o mesmo Elo que sempre montou os
+  grupos e as duplas — só que agora com um número e um nível na tela. A escala
+  mostrada é a clássica, **1500 no meio**, e isso importa: o Elo é **soma zero**,
+  então a média do grupo não se move e as faixas continuam querendo dizer a mesma
+  coisa no ano que vem. As faixas (±25 / ±75) saem de uma temporada simulada de
+  12 sextas com 16 jogadoras, que espalhou o grupo de −107 a +91. Abaixo de
+  `JOGOS_PARA_FIRMAR` a nota sai marcada como **provisória**, e quem nunca jogou
+  fica fora da lista.
+- **A dupla tem força própria** (`forcaDeDuplas`, aba “🤝 Dupla”). Não é a média
+  das duas — essa é só o **ponto de partida**. A partir dela, cada partida
+  **daquela dupla** move a nota pela fórmula do Elo, então `nota − base` é o
+  **entrosamento**: duas medianas que se acham em quadra rendem mais do que a
+  soma das notas diz, e isso não aparece na nota individual de ninguém.
+- **O entrosamento entra no balanceamento** (`ajusteDeEntrosamento` →
+  `ScheduleOptions.entrosamento` → `forcaDuo`). Escolher quem enfrenta quem
+  usando só a média individual ignorava que certas duplas rendem acima disso. Só
+  entram duplas com `JOGOS_PARA_ENTROSAMENTO`+ jogos juntas: com duas ou três
+  partidas o número é ruído, e ruído no confronto piora o equilíbrio.
 - **O ranking zera todo mês, o histórico não.** A força que equilibra as duplas e
   divide os grupos sai de `ratings()`, que é um **Elo**: cada partida move a nota
   conforme quem estava do outro lado, então **vencer quem está melhor rende muito

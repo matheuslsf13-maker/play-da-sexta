@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Avatar, Empty, Modal } from '../components/ui'
+import { rankingDeForca } from '../lib/forca'
 import { squareThumb } from '../lib/image'
 import { playedMatches } from '../lib/stats'
 import { useStore } from '../lib/store'
@@ -13,6 +14,15 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
   const [juntando, setJuntando] = useState<Player | null>(null)
   const [editando, setEditando] = useState<Player | null>(null)
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
+
+  /** Forca de cada jogadora, para o nivel aparecer na linha dela. */
+  const forcaPorId = useMemo(() => {
+    const m = new Map<string, ReturnType<typeof rankingDeForca>[number]>()
+    for (const l of rankingDeForca(data, (id) => data.players.find((p) => p.id === id)?.name ?? id)) {
+      m.set(l.player_id, l)
+    }
+    return m
+  }, [data])
 
   const sorted = [...data.players].sort(
     (a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'pt-BR'),
@@ -140,6 +150,19 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                   {p.nickname?.trim() && p.nickname.trim() !== p.name && (
                     <div className="tiny muted ellipsis">{p.name}</div>
                   )}
+                  {(() => {
+                    const f = forcaPorId.get(p.id)
+                    if (!f) return null
+                    return (
+                      <div className="tiny nowrap" style={{ marginTop: 2 }}>
+                        <span style={{ color: f.nivel.cor, fontWeight: 800 }}>
+                          {f.nivel.emoji} {f.nivel.titulo}
+                        </span>
+                        <span className="muted"> · força {f.nota}</span>
+                        {f.provisoria && <span className="muted"> (provisória)</span>}
+                      </div>
+                    )
+                  })()}
                   <div className="tiny muted">
                     {busy === p.id ? (
                       'salvando foto…'

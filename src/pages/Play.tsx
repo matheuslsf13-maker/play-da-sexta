@@ -28,6 +28,7 @@ import {
   rankPlayers,
 } from '../lib/stats'
 import { buildDayPoster, buildDayPosterGrupos, type PosterRow } from '../lib/poster'
+import { ajusteDeEntrosamento } from '../lib/forca'
 import { computeStreaks, podiosDoDia, streakLevel, vagasDoPodio } from '../lib/streaks'
 import { useWakeLock } from '../lib/wakelock'
 import { useStore } from '../lib/store'
@@ -1033,6 +1034,7 @@ function PlayDetail({
       groups: session.groups ?? undefined,
       jogadas,
       ratings: ratings(data, session.date),
+      entrosamento: ajusteDeEntrosamento(data),
       history: buildHistory(playedMatches(data).filter((m) => m.session_id !== session.id)),
       historyWeight: 1,
     })
@@ -1055,6 +1057,7 @@ function PlayDetail({
       playerIds: session.player_ids,
       groups: session.groups ?? undefined,
       ratings: ratings(data, session.date),
+      entrosamento: ajusteDeEntrosamento(data),
       history: buildHistory(playedMatches(data).filter((m) => m.session_id !== session.id)),
     })
     await replaceSessionMatches(session.id, planToMatches(session.id, fila))
