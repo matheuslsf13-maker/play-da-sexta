@@ -42,10 +42,27 @@ import {
   type Tie,
 } from '../lib/desempate'
 import { ajusteDeEntrosamento } from '../lib/forca'
+import {
+  CATEGORIAS,
+  categoriaDe,
+  confirmarPagamento,
+  consumirAvulsos,
+  situacaoDoAtleta,
+  type Categoria,
+} from '../lib/mensalidade'
 import { computeStreaks, podiosDoDia, streakLevel, vagasDoPodio } from '../lib/streaks'
 import { useWakeLock } from '../lib/wakelock'
 import { useStore } from '../lib/store'
-import { dateLabel, plural, todayISO, uid, type Match, type PlayFormat, type PlaySession } from '../lib/types'
+import {
+  dateLabel,
+  plural,
+  todayISO,
+  uid,
+  type Match,
+  type PlayFormat,
+  type Player,
+  type PlaySession,
+} from '../lib/types'
 import { RankTable } from './Ranking'
 
 /** Os formatos, na ordem em que fazem sentido escolher. */
@@ -314,7 +331,50 @@ function NewPlay({
   const repetem = Math.max(...tamanhos.map(repeticoesPorJogadora))
   const restPorVez = selected.length - effCourts * 4
 
+  /** Quem foi tocada mas esta devendo: abre o alerta que resolve na hora. */
+  const [pendente, setPendente] = useState<Player | null>(null)
+  /** Quem veio na lista colada mas nao pode entrar ainda. */
+  const [barradas, setBarradas] = useState<string[]>([])
+
+  /**
+   * A lista colada passa pelo mesmo portao do toque na foto.
+   *
+   * Quem esta devendo nao entra escalada -- fica no aviso amarelo, com o mesmo
+   * alerta que confirma o pagamento ou corrige a categoria. Escalar direto
+   * seria o portao existir so para quem monta o play no dedo.
+   */
+  function aplicarLista(ids: string[]): number {
+    const liberadas: string[] = []
+    const devendo: string[] = []
+    for (const id of ids) {
+      const p = data.players.find((x) => x.id === id)
+      if (p && !situacaoDoAtleta(p, data).liberado) devendo.push(id)
+      else liberadas.push(id)
+    }
+    setSelected(liberadas)
+    setBarradas(devendo)
+    return liberadas.length
+  }
+
+  /** Resolveu o cadastro: sai do aviso e entra no play. */
+  function liberar(p: Player) {
+    setBarradas((cur) => cur.filter((id) => id !== p.id))
+    setSelected((cur) => (cur.includes(p.id) ? cur : [...cur, p.id]))
+  }
+
+  /** "Todas" tambem respeita o cadastro: entra quem esta liberada. */
+  function selecionarTodas() {
+    setSelected(available.filter((p) => situacaoDoAtleta(p, data).liberado).map((p) => p.id))
+  }
+
   function toggle(id: string) {
+    const jogadora = data.players.find((p) => p.id === id)
+    const jaEscolhida = selected.includes(id)
+    // desmarcar nunca pede nada; so entrar no play exige cadastro em dia
+    if (!jaEscolhida && jogadora && !situacaoDoAtleta(jogadora, data).liberado) {
+      setPendente(jogadora)
+      return
+    }
     setSelected((cur) => (cur.includes(id) ? cur.filter((x) => x !== id) : [...cur, id]))
   }
 
@@ -370,13 +430,47 @@ function NewPlay({
             👯 Quem joga ({selected.length})
           </div>
           <div className="row" style={{ gap: 6 }}>
-            <button className="btn ghost sm" onClick={() => setSelected(available.map((p) => p.id))}>Todas</button>
+            <button className="btn ghost sm" onClick={selecionarTodas}>Todas</button>
             <button className="btn ghost sm" onClick={() => setSelected([])}>Limpar</button>
           </div>
         </div>
         <button className="btn purple block sm" style={{ marginTop: 10 }} onClick={() => setImportando(true)}>
           📋 Colar lista de confirmação do grupo
         </button>
+
+        {barradas.length > 0 && (
+          <div className="banner warn" style={{ marginTop: 10 }}>
+            <strong>
+              {barradas.length === 1
+                ? '1 da lista ficou de fora'
+                : `${barradas.length} da lista ficaram de fora`}
+            </strong>{' '}
+            — cadastro a acertar. Toque no nome para confirmar o pagamento ou trocar a categoria.
+            <div className="row wrap" style={{ gap: 6, marginTop: 8 }}>
+              {barradas.map((id) => {
+                const p = data.players.find((x) => x.id === id)
+                if (!p) return null
+                const sit = situacaoDoAtleta(p, data)
+                return (
+                  <button
+                    key={id}
+                    className="chip off"
+                    style={{ borderColor: 'var(--danger)' }}
+                    title={sit.rotulo}
+                    onClick={() => setPendente(p)}
+                  >
+                    <Avatar player={playerById(p.id)} size={20} />
+                    {p.nickname?.trim() || p.name}
+                    <span style={{ color: 'var(--danger)' }}>●</span>
+                  </button>
+                )
+              })}
+            </div>
+            <button className="btn ghost sm" style={{ marginTop: 8 }} onClick={() => setBarradas([])}>
+              Deixar todas de fora deste play
+            </button>
+          </div>
+        )}
 
         {available.length === 0 ? (
           <Empty icon="👯">
@@ -386,10 +480,19 @@ function NewPlay({
           <div className="grade-atletas">
             {available.map((p) => {
               const on = selected.includes(p.id)
+              const sit = situacaoDoAtleta(p, data)
               return (
-                <button key={p.id} className={`chip ${on ? 'on' : 'off'}`} onClick={() => toggle(p.id)}>
+                <button
+                  key={p.id}
+                  className={`chip ${on ? 'on' : 'off'}`}
+                  style={!on && !sit.liberado ? { borderColor: 'var(--danger)', opacity: 0.65 } : undefined}
+                  title={sit.liberado ? sit.rotulo : `${sit.rotulo} — toque para resolver`}
+                  onClick={() => toggle(p.id)}
+                >
                   <Avatar player={playerById(p.id)} size={22} />
                   <span className="nome-atleta">{p.nickname?.trim() || p.name}</span>
+                  {!sit.liberado && <span style={{ color: 'var(--danger)' }}>●</span>}
+                  {sit.alerta && <span title={sit.alerta}>⚠️</span>}
                 </button>
               )
             })}
@@ -665,9 +768,20 @@ function NewPlay({
       </div>
 
 
+      {pendente && (
+        <ResolverCadastro
+          jogadora={pendente}
+          onClose={() => setPendente(null)}
+          onLiberada={(p) => {
+            setPendente(null)
+            liberar(p)
+          }}
+        />
+      )}
+
       {importando && (
         <ImportarLista
-          onAplicar={(ids) => setSelected(ids)}
+          onAplicar={aplicarLista}
           onClose={() => setImportando(false)}
           onToast={onToast}
         />
@@ -739,7 +853,8 @@ function PlayDetail({
   onNext: (preset: Partial<PlaySession>) => void
   onToast: (m: string) => void
 }) {
-  const { data, nameOf, playerById, canEdit, saveMatches, saveSession, replaceSessionMatches } = useStore()
+  const { data, nameOf, playerById, canEdit, saveMatches, savePlayer, saveSession, replaceSessionMatches } =
+    useStore()
   const [showRank, setShowRank] = useState(false)
   const [arte, setArte] = useState<{ url: string; blob: Blob } | null>(null)
   const [gerando, setGerando] = useState(false)
@@ -1148,6 +1263,8 @@ function PlayDetail({
   async function finish() {
     if (doneCount < matches.length && !confirm(`Ainda faltam ${matches.length - doneCount} partidas sem placar. Finalizar mesmo assim?`)) return
     await saveSession({ ...session, status: 'finished' })
+    // o credito da avulsa vale por UM play: finalizado, ela volta a dever
+    for (const p of consumirAvulsos(session.player_ids, data)) await savePlayer(p)
     setShowRank(true)
     onToast('Play finalizado! Pontos somados ao ranking do mês 🏆')
   }
@@ -2100,6 +2217,75 @@ function EscolherPartida({
           )
         })}
       </div>
+    </Modal>
+  )
+}
+
+
+/**
+ * A jogadora foi escolhida para o play mas esta devendo.
+ *
+ * Em vez de so bloquear, resolve na hora: confirma o pagamento ou corrige a
+ * categoria -- porque quase sempre o bloqueio e cadastro errado (a convidada
+ * que virou mensalista e ninguem trocou), nao inadimplencia de verdade. Mandar
+ * a pessoa ate a aba Meninas e voltar faria perder a lista ja montada.
+ */
+function ResolverCadastro({
+  jogadora,
+  onClose,
+  onLiberada,
+}: {
+  jogadora: Player
+  onClose: () => void
+  onLiberada: (p: Player) => void
+}) {
+  const { data, savePlayer } = useStore()
+  const sit = situacaoDoAtleta(jogadora, data)
+  const atual = categoriaDe(jogadora)
+
+  async function pagar() {
+    const p = confirmarPagamento(jogadora)
+    await savePlayer(p)
+    onLiberada(p)
+  }
+
+  async function mudarPara(c: Categoria) {
+    // trocar de categoria zera o pagamento; virando convidada ja fica liberada
+    const p: Player = { ...jogadora, categoria: c, pago_mes: null, pago_avulso: false }
+    await savePlayer(p)
+    if (situacaoDoAtleta(p, data).liberado) onLiberada(p)
+    else onClose()
+  }
+
+  return (
+    <Modal title={jogadora.nickname?.trim() || jogadora.name} onClose={onClose}>
+      <div className="banner err" style={{ marginTop: 0 }}>
+        🔴 <strong>{sit.rotulo}.</strong> {sit.comoResolver}
+      </div>
+
+      <button className="btn pink block" style={{ marginTop: 12 }} onClick={() => void pagar()}>
+        ✅ Confirmar pagamento e escalar
+      </button>
+      <p className="tiny muted" style={{ marginTop: 6 }}>
+        {atual === 'avulsa'
+          ? 'Vale para este play; depois ela volta a aparecer como devendo.'
+          : 'Vale até o fim do mês; na virada ela volta a aparecer como devendo.'}
+      </p>
+
+      <div className="section-title" style={{ fontSize: 13, marginTop: 14 }}>
+        Ou corrija a categoria
+      </div>
+      <div className="stack" style={{ gap: 8 }}>
+        {CATEGORIAS.filter((c) => c.valor !== atual).map((c) => (
+          <button key={c.valor} className="btn ghost block sm" onClick={() => void mudarPara(c.valor)}>
+            {c.rotulo} — {c.explica}
+          </button>
+        ))}
+      </div>
+
+      <button className="btn ghost block sm" style={{ marginTop: 12 }} onClick={onClose}>
+        Deixar de fora deste play
+      </button>
     </Modal>
   )
 }

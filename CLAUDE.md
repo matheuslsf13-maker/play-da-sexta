@@ -106,6 +106,21 @@ supabase/*.sql   migrações, rodadas na ordem numérica no SQL Editor
   em `play` marca presença; em `cadastro` (aba Meninas) só cria quem falta. E os
   **ícones da lista do WhatsApp são descartados** (`ICONES`, em `roster.ts`) — saem
   **antes** da numeração, senão um “✅ 3 - Bia” esconde o “3 -”.
+- **Quem paga define quem entra** (`src/lib/mensalidade.ts`). Quatro categorias:
+  - **📅 Mensalista** — liberada enquanto `players.pago_mes` for o mês de hoje.
+    A regra é **derivada do calendário**: na virada do mês ela volta a aparecer
+    devendo **sozinha**, sem rotina para rodar, esquecer ou rodar duas vezes.
+  - **🎟️ Avulsa** — crédito de **uma** participação, gasto ao finalizar o play.
+  - **🤝 Convidada** — não paga e nunca é bloqueada; dois plays seguidos acendem
+    um **alerta**, porque quem decide se aquilo virou mensalista é a organização.
+  - **🎫 Isenta** — não paga e **nunca alerta**. É o padrão aqui: enquanto a
+    organização não disser o contrário, ninguém é barrado. **Se o grupo não cobra,
+    deixe todo mundo isenta e o portão some.**
+  Trocar de categoria **zera o pagamento**. Na hora de escalar, tocar em quem
+  está devendo abre o `ResolverCadastro`, que confirma o pagamento ou corrige a
+  categoria ali e já escala — quase todo bloqueio é cadastro errado, e mandar a
+  pessoa até Meninas perderia a lista montada. O botão “Todas” e a **lista colada**
+  também respeitam o portão.
 - **Play avulso** (`sessions.ranked = false`): conta no histórico e na força,
   mas **não soma no ranking do mês nem mexe nas sequências**. Serve para o jogo
   fora de calendário que não é o campeonato.

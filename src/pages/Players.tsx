@@ -2,6 +2,14 @@ import { useMemo, useRef, useState } from 'react'
 import { Avatar, Empty, Modal } from '../components/ui'
 import ImportarLista from '../components/ImportarLista'
 import { rankingDeForca } from '../lib/forca'
+import {
+  CATEGORIAS,
+  categoriaDe,
+  confirmarPagamento,
+  desfazerPagamento,
+  situacaoDoAtleta,
+  type Categoria,
+} from '../lib/mensalidade'
 import { squareThumb } from '../lib/image'
 import { playedMatches } from '../lib/stats'
 import { useStore } from '../lib/store'
@@ -14,6 +22,8 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
   const [busy, setBusy] = useState<string | null>(null)
   const [juntando, setJuntando] = useState<Player | null>(null)
   const [importando, setImportando] = useState(false)
+  /** Categoria de quem for cadastrada agora; fica escolhida para a proxima. */
+  const [novaCategoria, setNovaCategoria] = useState<Categoria>('isenta')
   const [editando, setEditando] = useState<Player | null>(null)
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -39,6 +49,9 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
       photo_url: null,
       active: true,
       created_at: new Date().toISOString(),
+      categoria: novaCategoria,
+      pago_mes: null,
+      pago_avulso: false,
     }
     await savePlayer(p)
     setName('')
@@ -95,6 +108,21 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
             />
             <button className="btn pink" onClick={() => void add()} disabled={!name.trim()}>Add</button>
           </div>
+          <div className="chips-scroll" style={{ marginTop: 8 }}>
+            {CATEGORIAS.map((c) => (
+              <button
+                key={c.valor}
+                className={`chip ${novaCategoria === c.valor ? 'on' : 'off'}`}
+                style={{ flex: 'none' }}
+                onClick={() => setNovaCategoria(c.valor)}
+              >
+                {c.rotulo}
+              </button>
+            ))}
+          </div>
+          <p className="tiny muted" style={{ marginTop: 6, marginBottom: 0 }}>
+            {CATEGORIAS.find((c) => c.valor === novaCategoria)?.explica}
+          </p>
 
           <button
             className="btn ghost block sm"
@@ -169,6 +197,7 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
                   {p.nickname?.trim() && p.nickname.trim() !== p.name && (
                     <div className="tiny muted ellipsis">{p.name}</div>
                   )}
+                  <SinalDePagamento jogadora={p} />
                   {(() => {
                     const f = forcaPorId.get(p.id)
                     if (!f) return null
@@ -421,5 +450,52 @@ function EditarPerfil({
         Cancelar
       </button>
     </Modal>
+  )
+}
+
+
+/**
+ * O semaforo do pagamento, na linha da jogadora.
+ *
+ * Verde nao quer dizer "pagou alguma vez": quer dizer "pode entrar no proximo
+ * play". Por isso a mensalista fica vermelha sozinha na virada do mes e a
+ * avulsa volta ao vermelho depois de jogar -- a regra e derivada, ninguem
+ * precisa lembrar de zerar nada.
+ */
+function SinalDePagamento({ jogadora }: { jogadora: Player }) {
+  const { data, savePlayer, canEdit } = useStore()
+  const categoria = categoriaDe(jogadora)
+  const sit = situacaoDoAtleta(jogadora, data)
+  const cor =
+    sit.cor === 'ok' ? 'var(--verde)' : sit.cor === 'atencao' ? 'var(--ouro)' : 'var(--danger)'
+
+  // isenta nao tem o que confirmar, e num grupo que nao cobra todo mundo e
+  // isenta -- mostrar um selo verde em cada linha so faria ruido
+  if (categoria === 'isenta') return null
+
+  return (
+    <div className="tiny" style={{ marginTop: 2 }}>
+      <span className="nowrap" style={{ color: cor, fontWeight: 800 }}>
+        ● {sit.rotulo}
+      </span>
+      {canEdit && categoria !== 'convidada' && (
+        <>
+          {' · '}
+          <button
+            className="linkish"
+            onClick={() =>
+              void savePlayer(
+                sit.liberado ? desfazerPagamento(jogadora) : confirmarPagamento(jogadora),
+              )
+            }
+          >
+            {sit.liberado ? 'desfazer' : 'confirmar pagamento'}
+          </button>
+        </>
+      )}
+      {sit.alerta && (
+        <div className="tiny" style={{ color: 'var(--ouro)', marginTop: 2 }}>⚠️ {sit.alerta}</div>
+      )}
+    </div>
   )
 }
