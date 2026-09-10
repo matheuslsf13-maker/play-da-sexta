@@ -1227,8 +1227,16 @@ textarea.input { line-height: 1.45; }
 
 /* quem ja pode ir embora */
 .banner.livres {
-  background: var(--verde-suave);
-  color: var(--verde);
-  border: 1px solid var(--verde);
+  background: var(--teal-suave);
+  color: var(--teal);
+  border: 1px solid var(--teal);
+  margin-bottom: 10px;
+}
+
+/* quem ja passou de fase e espera o resto da rodada */
+.banner.classificadas {
+  background: var(--purple-suave);
+  color: var(--purple);
+  border: 1px solid var(--purple);
   margin-bottom: 10px;
 }
