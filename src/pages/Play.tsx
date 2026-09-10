@@ -28,16 +28,19 @@ import { dayRankingText, scheduleText } from '../lib/share'
 import { isPlayed, matchPoints } from '../lib/scoring'
 import { loadFins, loadInicios, saveFins, saveInicios, type Horarios } from '../lib/emQuadra'
 import {
-  DUPLAS_NO_PODIO,
-  rankDuplasDoDia,
-  buildHistory,
+  aplicarBye,
   balance,
+  buildHistory,
   computeStats,
+  type DuplaDoDia,
+  DUPLAS_NO_PODIO,
   pairKey,
   playedMatches,
-  ratings,
-  rankPlayers,
   type PlayerStat,
+  pontosDeBye,
+  rankDuplasDoDia,
+  rankPlayers,
+  ratings,
 } from '../lib/stats'
 import { buildDayPoster, buildDayPosterGrupos, type PosterRow } from '../lib/poster'
 import {
@@ -1105,11 +1108,23 @@ function PlayDetail({
   /** Ha um proximo passo obrigatorio antes de encerrar o play? */
   const faltaFase = podeGerarFase2 || podeGerarRodada
 
+  /** Os pontos que o bye pagou neste play (so existe no grupos+duplas). */
+  const byeDoDia = useMemo(
+    () => pontosDeBye([session], matches),
+    [session, matches],
+  )
+
+  /** O podio do mata-mata, quando o play foi em grupos+duplas. */
+  const duplasDoDia = useMemo(
+    () => (soFase2 ? rankDuplasDoDia(partidasDaFase2, nameOf, byeDoDia.porDupla) : []),
+    [soFase2, partidasDaFase2, nameOf, byeDoDia],
+  )
+
   const dayRows = useMemo(() => {
     const todas = playedMatches(data, { sessionId: session.id })
     // a fase de grupos so serviu para formar as duplas; da fase 2 em diante conta
     const ms = soFase2 ? todas.filter((m) => (m.fase ?? 1) >= 2) : todas
-    return rankPlayers(computeStats(ms), nameOf)
+    return rankPlayers(aplicarBye(computeStats(ms), byeDoDia.porJogadora), nameOf)
   }, [data, session.id, nameOf, soFase2])
 
   /**
@@ -1431,6 +1446,29 @@ function PlayDetail({
         }
       }
       const logo = `${import.meta.env.BASE_URL}logo.png`
+      /*
+       * No grupos+duplas a arte coroa o PODIO DA CHAVE, nao os pontos.
+       *
+       * Cada dupla vira um bloco de duas linhas, com a mesma medalha para as
+       * duas -- o mesmo desenho ja usado para os grupos, que empilha blocos e
+       * continua legivel no celular.
+       */
+      if (soFase2 && duplasDoDia.length > 0) {
+        const porId = new Map(dayRows.map((s) => [s.player_id, s]))
+        const titulos = ['Campeãs do dia', 'Vice-campeãs', '3º lugar']
+        const blocos = duplasDoDia.slice(0, 3).map((d, i) => ({
+          titulo: titulos[i],
+          medalha: i,
+          rows: [d.a, d.b]
+            .map((id) => porId.get(id))
+            .filter((s): s is PlayerStat => Boolean(s))
+            .map((s) => linhaDe(s, true)),
+        }))
+        const blob = await buildDayPosterGrupos(dateLabel(session.date), blocos, logo)
+        setArte({ url: URL.createObjectURL(blob), blob })
+        return
+      }
+
       const um = podiosSel.length === 1 ? podiosSel[0] : null
       // o podio grande so serve para exatamente tres: com empate ou grupo
       // pequeno o podio tem outro tamanho, e aí vale o bloco empilhado
@@ -1912,7 +1950,7 @@ function PlayDetail({
                   {award.usouVida && ' (uma vida foi consumida para segurar o status hoje)'}
                 </div>
               )}
-              {soFase2 && <DuplasDoDia partidas={partidasDaFase2} />}
+              {soFase2 && <DuplasDoDia linhas={duplasDoDia} />}
               {podios.length > 1 ? (
                 podios.map((p) => (
                   <div key={p.grupo} style={{ marginBottom: 14 }}>
@@ -1974,6 +2012,7 @@ function PlayDetail({
                       rows: rowsSel,
                       nameOf,
                       podios: podiosSel,
+                      duplas: soFase2 ? duplasDoDia : undefined,
                       streaks: streaksDoDia,
                       award,
                     }),
@@ -2940,9 +2979,8 @@ function desempatarNoConfronto(rank: PlayerStat[], ms: Match[]): PlayerStat[] {
  * um podio na tela que nao bate com o que vale para a sequencia seria bug
  * esperando para ser reportado.
  */
-function DuplasDoDia({ partidas }: { partidas: Match[] }) {
+function DuplasDoDia({ linhas }: { linhas: DuplaDoDia[] }) {
   const { nameOf, playerById } = useStore()
-  const linhas = useMemo(() => rankDuplasDoDia(partidas, nameOf), [partidas, nameOf])
   if (linhas.length === 0) return null
 
   const medalhas = ['🥇', '🥈', '🥉']

@@ -95,6 +95,20 @@ supabase/*.sql   migrações, rodadas na ordem numérica no SQL Editor
   mais** do que vencer quem está pior. Não é o ranking do mês (senão o primeiro
   play do mês sairia desequilibrado) e não é média de pontos, que não sabe de quem
   você ganhou — e por isso quebrava no modo em grupos.
+- **No `grupos-duplas` quem decide o dia é a DUPLA.** A fase de grupos só forma as
+  duplas e **não pontua** — nem no dia, nem no mês (`pontuaveis`); o Elo continua
+  contando essas partidas, que aconteceram e só não dão ponto. O pódio é 🥇 campeã,
+  🥈 vice e 🥉 a melhor semifinalista, e o 🔥 segue esse mesmo pódio.
+  ⚠️ **O ouro e a prata saem da FINAL, nunca da conta de vitórias**
+  (`DuplaDoDia.medalha`): com bye a vice chega à final com as mesmas vitórias da
+  campeã e **mais pontos**, porque jogou uma partida a mais — o desempate por pontos
+  invertia o pódio, em 6% dos plays.
+- **O bye paga pontos** (`pontosDeBye`). Quem foi bem nos grupos passa direto de uma
+  rodada e jogava **uma partida a menos**, terminando o mês atrás de quem precisou
+  jogar para chegar no mesmo lugar da chave. O bye paga o que uma vitória daquela
+  rodada pagou **na média**: nem menos, que puniria quem foi bem, nem mais, que faria
+  valer a pena não jogar. Não vira partida — bye não tem adversária, então não mexe
+  no Elo, no retrospecto nem na força da dupla.
 - **O empate no fim é configurável** (`sessions.desempate`, `src/lib/desempate.ts`).
   São **três modos**, e o que muda é o que acontece no `alvo-1`x`alvo-1` (o 3x3):
   `alvo` (quem chegar primeiro leva), `vantagem` (“só vai a 2”, sem teto) e

@@ -27,12 +27,19 @@ const GOLD = '#ffc940'
 const SILVER = '#cdd3e6'
 const BRONZE = '#f0a86e'
 
-/** Um podio de grupo na arte do dia. */
+/** Um bloco do podio na arte do dia: um grupo, ou uma dupla medalhista. */
 export type PosterGrupo = {
-  /** "Grupo 1", "Grupo 2"... */
+  /** "Grupo 1", "Grupo 2", "Campeas"... */
   titulo: string
-  /** As tres primeiras do grupo. */
+  /** As tres primeiras do grupo -- ou as duas da dupla. */
   rows: PosterRow[]
+  /**
+   * O bloco INTEIRO e de uma medalha so (0 ouro, 1 prata, 2 bronze).
+   *
+   * E o caso da dupla: as duas ganharam a mesma coisa, entao numerar 1o e 2o
+   * dentro do bloco diria que uma foi melhor que a outra.
+   */
+  medalha?: number
 }
 
 /**
@@ -106,12 +113,15 @@ function blocoDeGrupo(
   const rotulos = ['1º', '2º', '3º']
 
   c.textAlign = 'left'
-  c.fillStyle = PINK
-  faixa(c, 84, y, 250, 46, 23)
-  c.fillStyle = '#fff'
   c.font = '800 28px system-ui, Segoe UI, Arial, sans-serif'
   c.letterSpacing = '2px'
-  c.fillText(grupo.titulo.toUpperCase(), 106, y + 32)
+  const rotulo = grupo.titulo.toUpperCase()
+  // a faixa acompanha o texto: "GRUPO 1" cabe em 250, "CAMPEAS DO DIA" nao
+  const largura = Math.max(250, c.measureText(rotulo).width + 44)
+  c.fillStyle = PINK
+  faixa(c, 84, y, largura, 46, 23)
+  c.fillStyle = '#fff'
+  c.fillText(rotulo, 106, y + 32)
   c.letterSpacing = '0px'
 
   const linhas = grupo.rows
@@ -121,10 +131,13 @@ function blocoDeGrupo(
   const cabeDetalhe = alturaLinha >= 62
 
   linhas.forEach((r, i) => {
-    const cor = cores[i] ?? BRONZE
+    // no bloco de uma medalha so, as duas linhas usam a MESMA cor e o mesmo
+    // rotulo: dentro da dupla nao ha primeira nem segunda
+    const posicao = grupo.medalha ?? i
+    const cor = cores[posicao] ?? BRONZE
     const ly = y + 62 + i * alturaLinha
     const meio = ly + alturaLinha / 2 - 4
-    c.fillStyle = i === 0 ? 'rgba(255,201,64,.14)' : 'rgba(255,255,255,.07)'
+    c.fillStyle = posicao === 0 ? 'rgba(255,201,64,.14)' : 'rgba(255,255,255,.07)'
     faixa(c, 84, ly, W - 168, alturaLinha - 8, 18)
 
     const raio = Math.min(28, (alturaLinha - 24) / 2)
@@ -133,7 +146,7 @@ function blocoDeGrupo(
     c.textAlign = 'left'
     c.fillStyle = cor
     c.font = '800 30px system-ui, Segoe UI, Arial, sans-serif'
-    c.fillText(rotulos[i] ?? `${i + 1}º`, 192, meio + 10)
+    c.fillText(rotulos[posicao] ?? `${posicao + 1}º`, 192, meio + 10)
 
     c.fillStyle = '#fff'
     c.font = '700 32px system-ui, Segoe UI, Arial, sans-serif'
