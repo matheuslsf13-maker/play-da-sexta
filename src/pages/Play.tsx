@@ -1011,6 +1011,23 @@ function PlayDetail({
     return lerRegra(lista[1])
   }
 
+  /**
+   * Que rodada do mata-mata e esta partida, para a quadra dizer.
+   *
+   * Sai do numero de jogos da fase, como o alvo -- e a disputa de 3o tem
+   * nome proprio, senao ela apareceria como "final" por dividir a fase.
+   */
+  const rotuloDaPartida = (m: Match): string => {
+    if (!soFase2 || (m.fase ?? 1) < 2) return ''
+    if (m.disputa_3o) return '🥉 3º lugar'
+    const fase = m.fase ?? 1
+    const jogos = matches.filter((x) => (x.fase ?? 1) === fase && !x.disputa_3o).length
+    if (jogos === 1) return '🏆 Final'
+    if (jogos === 2) return 'Semifinal'
+    if (jogos === 4) return 'Quartas'
+    return `${jogos * 2} duplas`
+  }
+
   const alvoDe = (m: Match) => {
     const alvos = session.alvos
     if (!alvos?.length) return session.target
@@ -1071,6 +1088,32 @@ function PlayDetail({
     () => podiosDoDia(dayRows, soFase2 ? null : session.groups),
     [dayRows, session.groups, soFase2],
   )
+
+  /**
+   * QUEM JA PODE IR EMBORA
+   *
+   * Nao basta "nao tem partida marcada": no grupos+duplas, entre o fim da
+   * fase de grupos e a formacao das duplas todo mundo fica sem partida, e
+   * ninguem esta liberada -- a proxima rodada ainda vai nascer.
+   *
+   * Entao sao duas condicoes: nenhuma partida sem placar, E nao seguir viva
+   * na chave (nos outros formatos a fila ja nasce inteira, entao a primeira
+   * condicao basta).
+   */
+  const jaPodemIr = useMemo(() => {
+    const comJogo = new Set<string>()
+    for (const m of matches) {
+      if (isPlayed(m)) continue
+      for (const id of jogadorasDaPartida(m)) comJogo.add(id)
+    }
+    if (soFase2) {
+      // sem as duplas formadas, a fase 2 ainda vai escolher quem fica
+      if (!session.duos?.length) return []
+      const vivasAgora = new Set(vivas.flat())
+      return session.player_ids.filter((id) => !comJogo.has(id) && !vivasAgora.has(id))
+    }
+    return session.player_ids.filter((id) => !comJogo.has(id))
+  }, [matches, soFase2, session.duos, session.player_ids, vivas])
 
   const doneCount = matches.filter(isPlayed).length
   const finished = session.status === 'finished'
@@ -1635,6 +1678,15 @@ function PlayDetail({
 
       <div className="card">
         <div className="section-title">🏐 Quadras agora</div>
+        {jaPodemIr.length > 0 && (
+          <div className="banner ok livres">
+            🚪 <strong>
+              {jaPodemIr.length === 1 ? 'Já pode ir' : `Já podem ir (${jaPodemIr.length})`}
+            </strong>{' '}
+            — sem mais partida nesta noite:{' '}
+            {jaPodemIr.map((id) => nameOf(id)).join(', ')}.
+          </div>
+        )}
         {matches.length === 0 ? (
           <Empty>Nenhuma partida gerada.</Empty>
         ) : (
@@ -1661,14 +1713,15 @@ function PlayDetail({
                 quadra={q}
                 target={alvoDe(m)}
                 desempate={regraDe(m)}
+                rodada={rotuloDaPartida(m)}
                 editable={editable}
                 iniciada={!!atual}
                 inicio={inicioDe(m)}
                 ocupadas={ocupadasFora(m)}
                 jogando={ocupadas}
-                grupo={grupoDe.get(m.team_a[0])}
+                grupo={(m.fase ?? 1) >= 2 ? undefined : grupoDe.get(m.team_a[0])}
                 totalGrupos={grupos?.length ?? 1}
-                repetida={duplasRepetidas.has(m.id)}
+                repetida={(m.fase ?? 1) < 2 && duplasRepetidas.has(m.id)}
                 espera={espera}
                 onScore={setScore}
                 onIniciar={() => iniciar(m, q)}
@@ -1724,7 +1777,11 @@ function PlayDetail({
             className="btn pink block"
             onClick={() => void (podeGerarFase2 ? gerarFase2() : gerarProximaRodada())}
           >
-            {podeGerarFase2 ? '🤝 Montar as duplas e a chave' : `🥅 Montar ${rotuloDaProxima.toLowerCase()}`}
+            {podeGerarFase2
+              ? '🤝 Montar as duplas e a chave'
+              : vivas.length === 2
+                ? '🥅 Montar final e 3º lugar'
+                : `🥅 Montar ${rotuloDaProxima.toLowerCase()}`}
           </button>
         </div>
       )}
@@ -2036,6 +2093,7 @@ function MatchCard({
   quadra,
   target,
   desempate,
+  rodada,
   editable,
   iniciada,
   inicio,
@@ -2056,6 +2114,8 @@ function MatchCard({
   quadra: number
   target: number
   desempate: Regra
+  /** Nome da rodada do mata-mata, quando ha. */
+  rodada?: string
   editable: boolean
   iniciada: boolean
   inicio: string | null
@@ -2101,6 +2161,7 @@ function MatchCard({
     <div className="match-head">
       <span>
         Quadra {quadra} <GrupoTag grupo={grupo} total={totalGrupos} />
+        {rodada && <span className="rodada-tag">{rodada}</span>}
         {repetida && (
           <span
             className="repetida-tag"
@@ -2373,7 +2434,7 @@ function ListaDePartidas({
               <div key={m.id} className="fila-linha">
                 <span className="fila-num">
                   {numerar ? `${i + 1}ª` : m.round}
-                  <GrupoTag grupo={grupoDe.get(m.team_a[0])} total={totalGrupos} />
+                  <GrupoTag grupo={(m.fase ?? 1) >= 2 ? undefined : grupoDe.get(m.team_a[0])} total={totalGrupos} />
                 </span>
                 <span className="grow" style={{ minWidth: 0 }}>
                   <span className={`fila-time${jogada && aWin ? ' venceu' : ''}`}>
@@ -2666,7 +2727,7 @@ function EscolherPartida({
             <button key={m.id} className="duo-row" onClick={() => onEscolher(m)} disabled={presas.length > 0}>
               <span className="fila-num">
                 {m.round}
-                <GrupoTag grupo={grupoDe.get(m.team_a[0])} total={totalGrupos} />
+                <GrupoTag grupo={(m.fase ?? 1) >= 2 ? undefined : grupoDe.get(m.team_a[0])} total={totalGrupos} />
               </span>
               <span className="grow" style={{ minWidth: 0 }}>
                 <span className="fila-time">{nameOf(m.team_a[0])} + {nameOf(m.team_a[1])}</span>
