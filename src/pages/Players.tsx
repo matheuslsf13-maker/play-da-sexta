@@ -13,6 +13,8 @@ import {
 import { squareThumb } from '../lib/image'
 import { playedMatches } from '../lib/stats'
 import { useStore } from '../lib/store'
+import { avisosDoBanco } from '../data/supabaseRepo'
+import { hasSupabase } from '../lib/supabase'
 import { jogadorasDaPartida } from '../lib/pairing'
 import { plural, uid, type Player } from '../lib/types'
 
@@ -35,6 +37,18 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
     }
     return m
   }, [data])
+
+  /**
+   * O banco ainda nao tem as colunas de pagamento?
+   *
+   * Com `players` carregado e NENHUMA jogadora trazendo `categoria`, a coluna
+   * nao existe la -- quando existe, ela vem preenchida pelo default. Sem
+   * aviso, confirmar pagamento parecia funcionar e desfazia sozinho na leitura
+   * seguinte: o app salva, o banco descarta o que nao conhece.
+   */
+  const semColunaDePagamento =
+    (hasSupabase && data.players.length > 0 && data.players.every((p) => p.categoria === undefined)) ||
+    avisosDoBanco.pagamento
 
   const sorted = [...data.players].sort(
     (a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'pt-BR'),
@@ -140,6 +154,15 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
           onClose={() => setImportando(false)}
           onToast={onToast}
         />
+      )}
+
+      {semColunaDePagamento && (
+        <div className="banner warn">
+          ⚠️ <strong>O banco ainda não tem as colunas de pagamento.</strong> Até rodar o
+          script <strong>09-categorias-pagamento.sql</strong> no Supabase, confirmar pagamento não
+          fica guardado: o app salva e o banco descarta o que não conhece. O resto do app funciona
+          normalmente.
+        </div>
       )}
 
       {editando && (
@@ -359,6 +382,7 @@ function EditarPerfil({
   const { data } = useStore()
   const [nome, setNome] = useState(jogadora.name)
   const [apelido, setApelido] = useState(jogadora.nickname ?? '')
+  const [categoria, setCategoria] = useState<Categoria>(categoriaDe(jogadora))
   const [apelidos, setApelidos] = useState((jogadora.aliases ?? []).join('\n'))
 
   const historico = useMemo(() => {
@@ -377,11 +401,17 @@ function EditarPerfil({
       .split('\n')
       .map((x) => x.trim())
       .filter(Boolean)
+    // trocar de categoria zera o pagamento: uma mensalista que virou avulsa nao
+    // herda o mes pago, e vice-versa -- senao alguem ficaria verde sem ter pago
+    const mudou = categoria !== categoriaDe(jogadora)
     onSalvar({
       ...jogadora,
       name: limpo,
       nickname: apelido.trim() || null,
       aliases: [...new Set(lista)],
+      categoria,
+      pago_mes: mudou ? null : jogadora.pago_mes,
+      pago_avulso: mudou ? false : jogadora.pago_avulso,
     })
   }
 
@@ -414,6 +444,26 @@ function EditarPerfil({
           feche aqui e use o <strong>🔗</strong> para juntar as duas.
         </div>
       )}
+
+      <div className="field" style={{ marginTop: 12 }}>
+        <span>Como ela paga</span>
+        <div className="chips-scroll">
+          {CATEGORIAS.map((c) => (
+            <button
+              key={c.valor}
+              className={`chip ${categoria === c.valor ? 'on' : 'off'}`}
+              style={{ flex: 'none' }}
+              onClick={() => setCategoria(c.valor)}
+            >
+              {c.rotulo}
+            </button>
+          ))}
+        </div>
+        <em className="hint" style={{ marginTop: 6 }}>
+          {CATEGORIAS.find((c) => c.valor === categoria)?.explica}
+          {categoria !== categoriaDe(jogadora) && ' — trocar de categoria zera o pagamento atual.'}
+        </em>
+      </div>
 
       <label className="field" style={{ marginTop: 12 }}>
         <span>Outras grafias do nome (uma por linha)</span>
