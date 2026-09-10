@@ -29,6 +29,8 @@ export type PlannedMatch = {
   team_b: [string, string]
   /** Indice do grupo (0 = grupo 1). Fora do modo em grupos e sempre 0. */
   grupo: number
+  /** 1 = fase de grupos, 2 = fase das duplas fixas. Ausente conta como 1. */
+  fase?: number
   /**
    * Dupla que joga uma segunda vez porque sobrou uma dupla sem adversaria.
    * Acontece so quando o total de combinacoes do grupo e impar.
@@ -80,6 +82,146 @@ export function tamanhosDosGrupos(jogadoras: number, grupos: number): number[] {
   const resto = jogadoras % grupos
   // a sobra vai para os primeiros grupos, que sao os de nivel mais alto
   return Array.from({ length: grupos }, (_, i) => base + (i < resto ? 1 : 0))
+}
+
+/**
+ * Grupos EQUILIBRADOS entre si, para o formato `grupos-duplas`.
+ *
+ * Diferente do `formarGrupos`, onde o grupo 1 leva as melhores de proposito.
+ * Aqui os grupos precisam ter a mesma forca media, senao a fase 2 nao e justa:
+ * "1a com 1a" so faz sentido se ser 1o custar o mesmo em qualquer grupo.
+ *
+ * A distribuicao e em serpentina -- com a lista ordenada por forca, entrega
+ * 1-2-3-4, depois 4-3-2-1, depois 1-2-3-4. Assim cada grupo recebe uma de cada
+ * faixa e as medias saem praticamente iguais.
+ */
+export function gruposEquilibrados(
+  playerIds: string[],
+  ratings: Map<string, number>,
+  tamanho: number,
+): string[][] {
+  const grupos = numeroDeGrupos(playerIds.length, tamanho)
+  if (grupos <= 1) return [playerIds.slice()]
+  const ordenados = [...playerIds].sort((a, b) => (ratings.get(b) ?? 2) - (ratings.get(a) ?? 2))
+  const out: string[][] = Array.from({ length: grupos }, () => [])
+  ordenados.forEach((id, i) => {
+    const volta = Math.floor(i / grupos)
+    const pos = i % grupos
+    out[volta % 2 === 0 ? pos : grupos - 1 - pos].push(id)
+  })
+  return out
+}
+
+/** Como uma jogadora terminou a fase de grupos. */
+export type Colocacao = {
+  id: string
+  /** Indice do grupo (0 = grupo 1). */
+  grupo: number
+  /** 1 = primeiro do grupo. */
+  posicao: number
+  pontos: number
+  saldo: number
+}
+
+/**
+ * FASE 2 -- as duplas fixas.
+ *
+ * Ordena todos por colocacao no grupo (as 1as primeiro, depois as 2as...) e,
+ * dentro da mesma colocacao, por desempenho. Depois junta os VIZINHOS dessa
+ * fila: melhor com melhor, media com media, ultima com ultima.
+ *
+ * Emparelhar vizinhos, e nao "1a com 1a" ao pe da letra, e o que faz a conta
+ * fechar quando o numero de grupos e impar: a 1a que sobra vira dupla com a
+ * melhor das 2as -- que e a vizinha dela na fila, e nao alguem de outro nivel.
+ *
+ * A restricao e nao repetir grupo: quem ja jogou junta a fase 1 inteira nao
+ * deve virar dupla agora. Quando as vizinhas sao do mesmo grupo, a proxima da
+ * fila entra no lugar.
+ */
+export function duplasDaFase2(colocacoes: Colocacao[], maxDuplas?: number): Duo[] {
+  const ordenados = [...colocacoes].sort(
+    (a, b) => a.posicao - b.posicao || b.pontos - a.pontos || b.saldo - a.saldo,
+  )
+  // sobrando gente para o tamanho do mata-mata, os ultimos da fila ficam de
+  // fora: com 20 jogadoras e alvo de 8 duplas, saem 4 e ficam 16 para as quartas
+  const fila = maxDuplas ? ordenados.slice(0, maxDuplas * 2) : ordenados
+  const duos: Duo[] = []
+  const usados = new Set<string>()
+  for (let i = 0; i < fila.length; i++) {
+    const a = fila[i]
+    if (usados.has(a.id)) continue
+    let escolhido = -1
+    let reserva = -1
+    for (let k = i + 1; k < fila.length; k++) {
+      if (usados.has(fila[k].id)) continue
+      if (fila[k].grupo !== a.grupo) { escolhido = k; break }
+      if (reserva === -1) reserva = k
+    }
+    const j = escolhido >= 0 ? escolhido : reserva
+    if (j === -1) break // numero impar de jogadoras: a ultima fica de fora
+    usados.add(a.id)
+    usados.add(fila[j].id)
+    duos.push([a.id, fila[j].id])
+  }
+  return duos
+}
+
+/** A menor potencia de 2 que comporta `n`. */
+function tamanhoDaChave(n: number): number {
+  let t = 1
+  while (t < n) t *= 2
+  return t
+}
+
+/**
+ * Uma rodada do mata-mata das duplas.
+ *
+ * `duos` chega na ordem de forca -- o indice 0 e a dupla mais bem classificada
+ * na fase de grupos. Quem passa de BYE sao as primeiras: ir bem no grupo vale
+ * um atalho. As demais se cruzam pelas pontas (a melhor pega a pior, a segunda
+ * pega a penultima), para as favoritas so se encontrarem no fim.
+ *
+ * O bye so aparece na primeira rodada: dali em diante o numero de duplas ja e
+ * potencia de dois e a conta fecha sozinha.
+ */
+export function rodadaDoMataMata(duos: Duo[]): { byes: Duo[]; jogos: [Duo, Duo][] } {
+  if (duos.length <= 1) return { byes: duos, jogos: [] }
+  const byes = tamanhoDaChave(duos.length) - duos.length
+  const passam = duos.slice(0, byes)
+  const jogam = duos.slice(byes)
+  const jogos: [Duo, Duo][] = []
+  for (let i = 0; i < jogam.length / 2; i++) {
+    jogos.push([jogam[i], jogam[jogam.length - 1 - i]])
+  }
+  return { byes: passam, jogos }
+}
+
+/**
+ * O nome da rodada, pelo tanto de duplas que SOBRAM depois dela.
+ *
+ * Nomear pelas que entram erraria: com 10 duplas, a primeira rodada tem 6 byes
+ * e so 2 jogos -- ela nao e uma "oitavas", e uma preliminar que corta de 10
+ * para 8.
+ */
+export function nomeDaRodada(entram: number): string {
+  const sobram = tamanhoDaChave(entram) / 2
+  if (entram <= 2) return 'Final'
+  if (sobram === 1) return 'Final'
+  if (sobram === 2) return 'Semifinal'
+  if (sobram === 4) return 'Quartas de final'
+  if (sobram === 8) return 'Oitavas de final'
+  return `Rodada de ${entram} duplas`
+}
+
+/** As duplas que ainda estao vivas: as que nunca perderam, na ordem de forca. */
+export function duplasVivas(duos: Duo[], jogos: Match[]): Duo[] {
+  const chave = (d: readonly string[]) => [...d].sort().join('|')
+  const eliminadas = new Set<string>()
+  for (const m of jogos) {
+    if (m.score_a === null || m.score_b === null) continue
+    eliminadas.add(chave(m.score_a > m.score_b ? m.team_b : m.team_a))
+  }
+  return duos.filter((d) => !eliminadas.has(chave(d)))
 }
 
 export function formarGrupos(
@@ -686,6 +828,7 @@ export function planToMatches(sessionId: string, fila: PlannedMatch[]): Match[] 
     team_b: m.team_b,
     score_a: null,
     score_b: null,
+    fase: m.fase ?? 1,
     started_at: null,
     ended_at: null,
   }))

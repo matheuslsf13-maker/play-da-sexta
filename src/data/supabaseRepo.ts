@@ -60,13 +60,17 @@ export const supabaseRepo: Repo = {
     if (!error) return
     // banco ainda sem as colunas do modo em grupos (script 05 nao rodou):
     // salva o resto, que e o que o play precisa para funcionar
-    if (/format|groups|ranked|desempate/.test(error.message ?? '')) {
+    if (/format|groups|ranked|desempate|duos|duplas_mm|alvos/.test(error.message ?? '')) {
       const {
         format: _f,
         groups: _g,
         ranked: _r,
         desempate: _d,
         desempate_vai2: _d2,
+        desempates: _ds,
+        duos: _duos,
+        duplas_mm: _mm,
+        alvos: _alvos,
         ...resto
       } = s
       const retry = await client().from('sessions').upsert(resto)
@@ -88,8 +92,8 @@ export const supabaseRepo: Repo = {
     if (!error) return
     // banco ainda sem as colunas de horario (scripts 04/05 nao rodaram):
     // salva o resto, que o app compensa com a copia local
-    if (/started_at|ended_at/.test(error.message ?? '')) {
-      const semHorarios = ms.map(({ started_at: _i, ended_at: _f, ...resto }) => resto)
+    if (/started_at|ended_at|fase/.test(error.message ?? '')) {
+      const semHorarios = ms.map(({ started_at: _i, ended_at: _f, fase: _fa, ...resto }) => resto)
       const retry = await client().from('matches').upsert(semHorarios)
       if (retry.error) throw retry.error
       return

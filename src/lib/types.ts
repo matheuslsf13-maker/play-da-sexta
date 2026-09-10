@@ -33,7 +33,7 @@ export type SessionStatus = 'open' | 'finished'
  *  - 'grupos' : o mesmo rodizio, mas dentro de grupos formados por nivel.
  *               Os pontos continuam individuais e o ranking do dia e unico.
  */
-export type PlayFormat = 'todas' | 'grupos'
+export type PlayFormat = 'todas' | 'grupos' | 'grupos-duplas'
 
 /** Um "Play de Todas": um dia de jogos. */
 export type PlaySession = {
@@ -60,6 +60,27 @@ export type PlaySession = {
    * Ver `src/lib/desempate.ts`. Ausente = `nenhum`, como os plays antigos.
    */
   desempate?: string | null
+  /**
+   * No formato `grupos-duplas`, o desempate de CADA fase:
+   * [grupos, duplas fixas, semifinal, final]. Ausente = `desempate` em todas.
+   */
+  desempates?: string[] | null
+  /**
+   * No formato `grupos-duplas`, as duplas fixas da fase 2 ja formadas, na
+   * ordem de forca. Nulo enquanto a fase 1 nao terminou.
+   */
+  duos?: [string, string][] | null
+  /**
+   * Quantas duplas entram no mata-mata. Padrao 8 (= 16 jogadoras, quartas de
+   * final). Com mais gente, as piores colocadas na fase de grupos ficam de
+   * fora; com menos, todas entram e as melhores passam de bye.
+   */
+  duplas_mm?: number | null
+  /**
+   * No formato `grupos-duplas`, quantos games fecham a partida em cada fase:
+   * [grupos, duplas fixas, semifinal, final]. Ausente = usa `target` em todas.
+   */
+  alvos?: number[] | null
   /** Historico: hoje o tie sempre vai a 2, entao isto e sempre `true`. */
   desempate_vai2?: boolean | null
   /**
@@ -84,6 +105,11 @@ export type Match = {
   team_b: [string, string]
   score_a: number | null
   score_b: number | null
+  /**
+   * Formato `grupos-duplas`: 1 = fase de grupos, 2 = duplas fixas,
+   * 3 = semifinal, 4 = final. Ausente conta como 1.
+   */
+  fase?: number
   /** Quando a partida entrou em quadra. Null = ainda nao comecou. */
   started_at?: string | null
   /** Quando o placar foi lancado. Alimenta o "quem esta fora ha mais tempo". */

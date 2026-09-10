@@ -1106,3 +1106,73 @@ textarea.input { line-height: 1.45; }
 .atleta-linha { padding-bottom: 10px; border-bottom: 1px dashed var(--line); }
 .atleta-linha:last-child { padding-bottom: 0; border-bottom: 0; }
 .atleta-acoes { margin-top: 8px; }
+
+/* cada fase do grupos+duplas: games e desempate no mesmo bloco */
+.fase-box {
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 10px;
+  background: var(--card-2);
+}
+.fase-nome {
+  display: block;
+  font-size: 11.5px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: .5px;
+  color: var(--marca);
+  margin-bottom: 6px;
+}
+/* o stepper quer a largura toda (o input dele e `flex: 1`), entao dentro de um
+   `.row` ele cobria o vizinho -- aqui ele fica sozinho na linha */
+.fase-box .stepper { width: 100%; }
+
+
+/* ---- uma cor por grupo ----
+   Nao saem da paleta da marca de proposito: precisam ser distinguiveis ENTRE
+   SI a distancia, na beira da quadra, e nao harmonicas. Oito porque o app
+   aceita ate 8 grupos (32 jogadoras em grupos de 4). */
+:root {
+  --g1: #d81b60; --g2: #6a3fb5; --g3: #0f8a7e; --g4: #c2610a;
+  --g5: #2d63c8; --g6: #9c1f7a; --g7: #7a7200; --g8: #0d6ea8;
+}
+:root[data-tema="escuro"] {
+  --g1: #ff6ea0; --g2: #b388ff; --g3: #34d399; --g4: #fb923c;
+  --g5: #7dd3fc; --g6: #f472b6; --g7: #fbbf24; --g8: #60a5fa;
+}
+.grupo-tag.g1 { background: var(--g1); }
+.grupo-tag.g2 { background: var(--g2); }
+.grupo-tag.g3 { background: var(--g3); }
+.grupo-tag.g4 { background: var(--g4); }
+.grupo-tag.g5 { background: var(--g5); }
+.grupo-tag.g6 { background: var(--g6); }
+.grupo-tag.g7 { background: var(--g7); }
+.grupo-tag.g8 { background: var(--g8); }
+
+/* a partida herda a cor do grupo dela: na quadra da para achar de longe */
+.match.g1, .fila-linha.g1 { border-left: 4px solid var(--g1); }
+.match.g2, .fila-linha.g2 { border-left: 4px solid var(--g2); }
+.match.g3, .fila-linha.g3 { border-left: 4px solid var(--g3); }
+.match.g4, .fila-linha.g4 { border-left: 4px solid var(--g4); }
+.match.g5, .fila-linha.g5 { border-left: 4px solid var(--g5); }
+.match.g6, .fila-linha.g6 { border-left: 4px solid var(--g6); }
+.match.g7, .fila-linha.g7 { border-left: 4px solid var(--g7); }
+.match.g8, .fila-linha.g8 { border-left: 4px solid var(--g8); }
+.fila-linha[class*=' g'] { padding-left: 8px; }
+
+.grupo-box.g1 { border-left-color: var(--g1); }
+.grupo-box.g2 { border-left-color: var(--g2); }
+.grupo-box.g3 { border-left-color: var(--g3); }
+.grupo-box.g4 { border-left-color: var(--g4); }
+.grupo-box.g5 { border-left-color: var(--g5); }
+.grupo-box.g6 { border-left-color: var(--g6); }
+.grupo-box.g7 { border-left-color: var(--g7); }
+.grupo-box.g8 { border-left-color: var(--g8); }
+.grupo-box.g1 .grupo-nome { color: var(--g1); }
+.grupo-box.g2 .grupo-nome { color: var(--g2); }
+.grupo-box.g3 .grupo-nome { color: var(--g3); }
+.grupo-box.g4 .grupo-nome { color: var(--g4); }
+.grupo-box.g5 .grupo-nome { color: var(--g5); }
+.grupo-box.g6 .grupo-nome { color: var(--g6); }
+.grupo-box.g7 .grupo-nome { color: var(--g7); }
+.grupo-box.g8 .grupo-nome { color: var(--g8); }

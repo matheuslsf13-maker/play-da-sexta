@@ -2,8 +2,14 @@ import { useEffect, useMemo, useState } from 'react'
 import ImportarLista from '../components/ImportarLista'
 import { Avatar, Empty, Modal, StatBox, Stepper, shareOrCopy } from '../components/ui'
 import {
+  duplasDaFase2,
+  duplasVivas,
   formarGrupos,
+  gruposEquilibrados,
   gerarFila,
+  nomeDaRodada,
+  rodadaDoMataMata,
+  type Colocacao,
   jogadorasDaPartida,
   ordemDeEspera,
   ordemPrevista,
@@ -21,11 +27,14 @@ import { isPlayed, matchPoints } from '../lib/scoring'
 import { loadFins, loadInicios, saveFins, saveInicios, type Horarios } from '../lib/emQuadra'
 import {
   buildHistory,
+  balance,
   computeStats,
+  duoStats,
   pairKey,
   playedMatches,
   ratings,
   rankPlayers,
+  type PlayerStat,
 } from '../lib/stats'
 import { buildDayPoster, buildDayPosterGrupos, type PosterRow } from '../lib/poster'
 import {
@@ -42,6 +51,7 @@ import {
   type Tie,
 } from '../lib/desempate'
 import { ajusteDeEntrosamento } from '../lib/forca'
+import { OPCOES_DE_FASE, resumoDaFase } from '../lib/desempate'
 import {
   CATEGORIAS,
   categoriaDe,
@@ -71,6 +81,11 @@ const FORMATOS: { valor: PlayFormat; rotulo: string; explica: string }[] = [
     valor: 'todas',
     rotulo: '🔁 Todas com todas',
     explica: 'cada uma faz dupla com cada uma das outras, exatamente uma vez',
+  },
+  {
+    valor: 'grupos-duplas',
+    rotulo: '🤝 Grupos + duplas',
+    explica: 'rodízio dentro do grupo, depois dupla fixa por colocação e mata-mata',
   },
   {
     valor: 'grupos',
@@ -287,6 +302,14 @@ function NewPlay({
   const [courts, setCourts] = useState(preset.courts ?? 3)
   const [format, setFormat] = useState<PlayFormat>(preset.format ?? 'todas')
   const [porGrupo, setPorGrupo] = useState(8)
+  /** Quantas duplas entram no mata-mata: 8 = 16 jogadoras, quartas de final. */
+  const [duplasMM, setDuplasMM] = useState(8)
+  /** Games que fecham a partida em cada fase: grupos, duplas, semi, final. */
+  const [alvos, setAlvos] = useState<number[]>([4, 4, 4, 4])
+  /** O desempate de cada fase, na mesma ordem. */
+  const [desempates, setDesempates] = useState<string[]>(
+    ['nenhum', 'nenhum', 'nenhum', 'nenhum'],
+  )
   const [ranked, setRanked] = useState(preset.ranked ?? true)
   const [importando, setImportando] = useState(false)
   const [target, setTarget] = useState(preset.target ?? 4)
@@ -304,13 +327,15 @@ function NewPlay({
 
   // no modo em grupos o app decide quantos grupos cabem: quem escolhe e o
   // tamanho, e a conta sai do numero de meninas que confirmaram
-  const grupos = useMemo(
-    () =>
-      format === 'grupos' && selected.length >= 8
-        ? formarGrupos(selected, forca, porGrupo)
-        : [selected],
-    [format, selected, forca, porGrupo],
-  )
+  const emDuplas = format === 'grupos-duplas'
+  const grupos = useMemo(() => {
+    if (selected.length < 8) return [selected]
+    // no formato com fase 2 os grupos precisam ter a MESMA forca, senao ser 1a
+    // vale mais num grupo do que no outro e a dupla da fase 2 fica injusta
+    if (emDuplas) return gruposEquilibrados(selected, forca, porGrupo)
+    if (format === 'grupos') return formarGrupos(selected, forca, porGrupo)
+    return [selected]
+  }, [format, emDuplas, selected, forca, porGrupo])
   const tamanhos = grupos.map((g) => g.length)
 
   // as quadras saem dos GRUPOS, nao do total: cada partida precisa de quatro do
@@ -385,7 +410,7 @@ function NewPlay({
     }
     setBusy(true)
     try {
-      const emGrupos = format === 'grupos' && grupos.length > 1
+      const emGrupos = (format === 'grupos' || emDuplas) && grupos.length > 1
       const fila = gerarFila({
         playerIds: selected,
         ratings: forca,
@@ -405,8 +430,11 @@ function NewPlay({
         player_ids: selected,
         status: 'open',
         created_at: new Date().toISOString(),
-        format: emGrupos ? 'grupos' : 'todas',
+        format: emGrupos ? (emDuplas ? 'grupos-duplas' : 'grupos') : 'todas',
         groups: emGrupos ? grupos : null,
+        duplas_mm: emGrupos && emDuplas ? duplasMM : null,
+        alvos: emGrupos && emDuplas ? alvos : null,
+        desempates: emGrupos && emDuplas ? desempates : null,
         ranked,
       }
       await saveSession(session)
@@ -522,7 +550,13 @@ function NewPlay({
             <button
               key={f.valor}
               className={`opcao${format === f.valor ? ' on' : ''}`}
-              onClick={() => setFormat(f.valor)}
+              onClick={() => {
+                // o grupos+duplas e jogado em grupos de 4; nos outros o grupo
+                // grande e que faz sentido, por isso o padrao muda junto
+                if (f.valor === 'grupos-duplas' && !emDuplas) setPorGrupo(4)
+                if (f.valor === 'grupos' && emDuplas) setPorGrupo(8)
+                setFormat(f.valor)
+              }}
             >
               <span className="opcao-marca">{format === f.valor ? '◉' : '○'}</span>
               <span className="grow" style={{ minWidth: 0 }}>
@@ -559,12 +593,15 @@ function NewPlay({
             </div>
           </div>
 
-          <div className="field">
-            <span>Vai até</span>
-            <Stepper value={target} min={1} max={21} onChange={setTarget} />
-            <em className="hint">games para vencer a partida — o padrão é 4</em>
-          </div>
+          {!emDuplas && (
+            <div className="field">
+              <span>Vai até</span>
+              <Stepper value={target} min={1} max={21} onChange={setTarget} />
+              <em className="hint">games para vencer a partida — o padrão é 4</em>
+            </div>
+          )}
 
+          {!emDuplas && (
           <div className="field">
             <span>No {target - 1}x{target - 1}</span>
             <div className="row wrap" style={{ gap: 6 }}>
@@ -601,6 +638,53 @@ function NewPlay({
 
             <em className="hint" style={{ marginTop: 6 }}>{explicarRegra(target, regra)}</em>
           </div>
+          )}
+
+          {emDuplas && grupos.length > 1 && (
+            <div className="toggle-card">
+              <div className="field">
+                <span>Games e desempate, por fase</span>
+                <div className="stack" style={{ gap: 8 }}>
+                  {['Grupos', 'Duplas fixas', 'Semifinal', 'Final'].map((rotulo, i) => (
+                    <div key={rotulo} className="fase-box">
+                      <span className="fase-nome">{rotulo}</span>
+                      <Stepper
+                        value={alvos[i]}
+                        min={2}
+                        max={12}
+                        onChange={(v) => setAlvos((a) => a.map((x, k) => (k === i ? v : x)))}
+                      />
+                      <select
+                        className="select"
+                        style={{ marginTop: 6 }}
+                        value={desempates[i] ?? 'nenhum'}
+                        onChange={(e) =>
+                          setDesempates((d) => d.map((x, k) => (k === i ? e.target.value : x)))
+                        }
+                      >
+                        {OPCOES_DE_FASE.map((op) => (
+                          <option key={op.valor} value={op.valor}>{op.rotulo}</option>
+                        ))}
+                      </select>
+                      <em className="hint" style={{ marginTop: 4 }}>
+                        {resumoDaFase(alvos[i], desempates[i] ?? 'nenhum')}
+                      </em>
+                    </div>
+                  ))}
+                </div>
+                <em className="hint">
+                  Cada fase fecha do seu jeito: os grupos podem ir no 4 seco e a final ir a 2 —
+                  é o jogo que decide o dia.
+                </em>
+              </div>
+
+              <div className="field" style={{ marginBottom: 0 }}>
+                <span>Duplas no mata-mata</span>
+                <Stepper value={duplasMM} min={2} max={16} onChange={setDuplasMM} />
+                <em className="hint">{descreverFase2(grupos, duplasMM)}</em>
+              </div>
+            </div>
+          )}
 
           <div className={`toggle-card${ranked ? '' : ' avulso'}`}>
             <label className="row" style={{ gap: 10, cursor: 'pointer' }}>
@@ -616,7 +700,7 @@ function NewPlay({
             </label>
           </div>
 
-          {format === 'grupos' && (
+          {(format === 'grupos' || emDuplas) && (
             <div className="toggle-card">
               <div className="field" style={{ marginBottom: 0 }}>
                 <span>Meninas por grupo</span>
@@ -624,7 +708,11 @@ function NewPlay({
                 <em className="hint">
                   {selected.length < 8
                     ? 'com menos de 8 confirmadas não dá para dividir: vai sair um grupo só'
-                    : `com ${selected.length} confirmadas o app monta ${descreverGrupos(tamanhos)} — grupo 1 com quem está jogando melhor`}
+                    : `com ${selected.length} confirmadas o app monta ${descreverGrupos(tamanhos)} — ${
+                        emDuplas
+                          ? 'todos com a mesma força média, para ser 1ª valer o mesmo em qualquer grupo'
+                          : 'grupo 1 com quem está jogando melhor'
+                      }`}
                 </em>
                 {selected.length >= 8 && (
                   <>
@@ -757,7 +845,7 @@ function NewPlay({
           {format === 'grupos' && grupos.length > 1 && (
             <div className="stack" style={{ marginTop: 4 }}>
               {grupos.map((g, i) => (
-                <div key={i} className="grupo-box">
+                <div key={i} className={`grupo-box ${classeDoGrupo(i + 1)}`}>
                   <div className="grupo-nome">Grupo {i + 1} · {g.length} meninas · {partidasDoRodizio(g.length)} partidas</div>
                   <div className="tiny">{g.map(nameOf).join(' · ')}</div>
                 </div>
@@ -873,15 +961,93 @@ function PlayDetail({
     [data.matches, session.id],
   )
 
-  const dayRows = useMemo(() => {
-    const ms = playedMatches(data, { sessionId: session.id })
-    return rankPlayers(computeStats(ms), nameOf)
-  }, [data, session.id, nameOf])
+  const soFase2 = session.format === 'grupos-duplas'
 
-  /** Um podio por grupo quando o play e em grupos; um so quando nao e. */
+  /**
+   * Quantos pontos fecham ESTA partida.
+   *
+   * Os quatro alvos configurados sao grupos / duplas / semifinal / final. No
+   * mata-mata o numero da fase nao serve de indice -- com 20 jogadoras ha uma
+   * rodada preliminar, e ai a semifinal cai na fase 4 e nao na 3. O que
+   * identifica a rodada e QUANTOS JOGOS ela tem: 1 e a final, 2 e a semifinal.
+   */
+  /** So as partidas que valem no grupos+duplas: da fase 2 em diante. */
+  const partidasDaFase2 = useMemo(
+    () => matches.filter((m) => (m.fase ?? 1) >= 2 && isPlayed(m)),
+    [matches],
+  )
+
+  /**
+   * A regra do empate desta partida.
+   *
+   * No grupos+duplas cada fase tem a sua (`session.desempates`), pela mesma
+   * conta do `alvoDe`. Nos outros formatos, e nos plays antigos, vale o
+   * `desempate` unico do play.
+   */
+  const regraDe = (m: Match): Regra => {
+    const lista = session.desempates
+    if (!lista?.length) return lerRegra(session.desempate)
+    const fase = m.fase ?? 1
+    if (fase === 1) return lerRegra(lista[0])
+    const jogosNaFase = matches.filter((x) => (x.fase ?? 1) === fase).length
+    if (jogosNaFase === 1) return lerRegra(lista[3])
+    if (jogosNaFase === 2) return lerRegra(lista[2])
+    return lerRegra(lista[1])
+  }
+
+  const alvoDe = (m: Match) => {
+    const alvos = session.alvos
+    if (!alvos?.length) return session.target
+    const fase = m.fase ?? 1
+    if (fase === 1) return alvos[0] ?? session.target
+    const jogosNaFase = matches.filter((x) => (x.fase ?? 1) === fase).length
+    if (jogosNaFase === 1) return alvos[3] ?? session.target
+    if (jogosNaFase === 2) return alvos[2] ?? session.target
+    return alvos[1] ?? session.target
+  }
+
+  const daFase1 = useMemo(() => matches.filter((m) => (m.fase ?? 1) === 1), [matches])
+  const daFase2 = useMemo(() => matches.filter((m) => (m.fase ?? 1) === 2), [matches])
+  /** Todas as partidas do mata-mata (fase 2 em diante), por rodada. */
+  const doMataMata = useMemo(() => matches.filter((m) => (m.fase ?? 1) >= 2), [matches])
+  const ultimaFase = doMataMata.reduce((t, m) => Math.max(t, m.fase ?? 1), 1)
+  const daUltimaRodada = doMataMata.filter((m) => (m.fase ?? 1) === ultimaFase)
+  /** Quem ainda nao perdeu. Uma dupla so = ja tem campea. */
+  const vivas = useMemo(
+    () => (session.duos?.length ? duplasVivas(session.duos, doMataMata) : []),
+    [session.duos, doMataMata],
+  )
+  /** A fase 1 acabou e a 2 ainda nao nasceu: e a hora de sortear as duplas. */
+  const podeGerarFase2 =
+    soFase2 && daFase2.length === 0 && daFase1.length > 0 && daFase1.every(isPlayed)
+  /** A rodada atual acabou e ainda ha mais de uma dupla viva. */
+  const podeGerarRodada =
+    soFase2 &&
+    daFase2.length > 0 &&
+    daUltimaRodada.length > 0 &&
+    daUltimaRodada.every(isPlayed) &&
+    vivas.length > 1
+  const rotuloDaProxima = vivas.length > 1 ? nomeDaRodada(vivas.length) : ''
+  /** Ha um proximo passo obrigatorio antes de encerrar o play? */
+  const faltaFase = podeGerarFase2 || podeGerarRodada
+
+  const dayRows = useMemo(() => {
+    const todas = playedMatches(data, { sessionId: session.id })
+    // a fase de grupos so serviu para formar as duplas; da fase 2 em diante conta
+    const ms = soFase2 ? todas.filter((m) => (m.fase ?? 1) >= 2) : todas
+    return rankPlayers(computeStats(ms), nameOf)
+  }, [data, session.id, nameOf, soFase2])
+
+  /**
+   * Como o dia e dividido para o podio.
+   *
+   * No formato com fase 2 nao ha divisao: os grupos ja se misturaram no
+   * mata-mata, e o podio do dia e um so, pela campanha de cada uma da fase 2
+   * em diante. Nos outros formatos continua sendo o grupo.
+   */
   const podios = useMemo(
-    () => podiosDoDia(dayRows, session.groups),
-    [dayRows, session.groups],
+    () => podiosDoDia(dayRows, soFase2 ? null : session.groups),
+    [dayRows, session.groups, soFase2],
   )
 
   const doneCount = matches.filter(isPlayed).length
@@ -1260,6 +1426,77 @@ function PlayDetail({
     onToast('Novas duplas geradas 🔄')
   }
 
+  async function gerarFase2() {
+    const gruposDoPlay = session.groups
+    if (!gruposDoPlay || gruposDoPlay.length < 2) {
+      onToast('Este play não tem grupos')
+      return
+    }
+    // classificacao dentro de cada grupo, so com as partidas da fase 1
+    const colocacoes: Colocacao[] = []
+    gruposDoPlay.forEach((g, gi) => {
+      const doGrupo = new Set(g)
+      const ms = daFase1.filter((m) => doGrupo.has(m.team_a[0]))
+      const base = rankPlayers(computeStats(ms), nameOf).filter((r) => doGrupo.has(r.player_id))
+      // `rankPlayers` ja ordena por pontos, diferenca de games e vitorias. O que
+      // ele nao tem e o CONFRONTO DIRETO, que so faz sentido dentro do grupo:
+      // empatado em tudo, fica na frente quem venceu quando as duas se
+      // enfrentaram. O alfabetico continua como ultimo recurso, para a ordem
+      // nunca depender do acaso.
+      const rank = desempatarNoConfronto(base, ms)
+      rank.forEach((r, k) => {
+        colocacoes.push({
+          id: r.player_id,
+          grupo: gi,
+          posicao: k + 1,
+          pontos: r.points,
+          saldo: r.wins - r.losses,
+        })
+      })
+    })
+
+    const duos = duplasDaFase2(colocacoes, session.duplas_mm ?? 8)
+    if (duos.length < 2) {
+      onToast('Poucas duplas para o mata-mata')
+      return
+    }
+    const { byes, jogos } = rodadaDoMataMata(duos)
+    const fila = jogos.map(([a, b]) => ({ team_a: a, team_b: b, grupo: 0, fase: 2 }))
+    const novas = planToMatches(session.id, fila).map((m, i) => ({
+      ...m,
+      round: daFase1.length + i + 1,
+    }))
+    await saveSession({ ...session, duos, rounds: daFase1.length + novas.length })
+    await saveMatches(novas)
+    onToast(
+      `${nomeDaRodada(duos.length)}: ${duos.length} duplas` +
+        (byes.length ? `, ${byes.length} de bye 🤝` : ' 🤝'),
+    )
+  }
+
+  /**
+   * A proxima rodada do mata-mata: quem nao perdeu segue, na ordem de forca.
+   *
+   * Os byes da primeira rodada nao precisam ser guardados: quem nunca perdeu
+   * esta vivo, e `duplasVivas` deduz isso das partidas ja lancadas.
+   */
+  async function gerarProximaRodada() {
+    if (vivas.length < 2) {
+      onToast('O mata-mata já tem campeã')
+      return
+    }
+    const { jogos } = rodadaDoMataMata(vivas)
+    const fase = ultimaFase + 1
+    const fila = jogos.map(([a, b]) => ({ team_a: a, team_b: b, grupo: 0, fase }))
+    const novas = planToMatches(session.id, fila).map((m, i) => ({
+      ...m,
+      round: matches.length + i + 1,
+    }))
+    await saveSession({ ...session, rounds: matches.length + novas.length })
+    await saveMatches(novas)
+    onToast(`${nomeDaRodada(vivas.length)} montada 🥅`)
+  }
+
   async function finish() {
     if (doneCount < matches.length && !confirm(`Ainda faltam ${matches.length - doneCount} partidas sem placar. Finalizar mesmo assim?`)) return
     await saveSession({ ...session, status: 'finished' })
@@ -1333,7 +1570,7 @@ function PlayDetail({
           <div className="section-title">👥 Grupos</div>
           <div className="stack">
             {grupos.map((g, i) => (
-              <div key={i} className="grupo-box">
+              <div key={i} className={`grupo-box ${classeDoGrupo(i + 1)}`}>
                 <div className="grupo-nome">Grupo {i + 1} · {g.length} meninas</div>
                 <div className="tiny">{g.map(nameOf).join(' · ')}</div>
               </div>
@@ -1372,8 +1609,8 @@ function PlayDetail({
                 key={m.id}
                 match={m}
                 quadra={q}
-                target={session.target}
-                desempate={regraDoPlay}
+                target={alvoDe(m)}
+                desempate={regraDe(m)}
                 editable={editable}
                 iniciada={!!atual}
                 inicio={inicioDe(m)}
@@ -1421,8 +1658,27 @@ function PlayDetail({
         onCorrigir={(m) => setCorrigindo(m)}
       />
 
+      {editable && faltaFase && (
+        <div className="card" style={{ borderColor: 'var(--marca)' }}>
+          <div className="section-title" style={{ marginTop: 0 }}>
+            ⏭️ O play ainda tem fase pela frente
+          </div>
+          <p className="tiny muted" style={{ marginTop: 0 }}>
+            {podeGerarFase2
+              ? 'A fase de grupos acabou. O próximo passo é formar as duplas fixas e sortear o mata-mata — só depois disso o play tem pódio.'
+              : `A rodada terminou e ainda há ${vivas.length} duplas vivas. Monte a próxima antes de encerrar.`}
+          </p>
+          <button
+            className="btn pink block"
+            onClick={() => void (podeGerarFase2 ? gerarFase2() : gerarProximaRodada())}
+          >
+            {podeGerarFase2 ? '🤝 Sortear o mata-mata' : `🥅 Montar ${rotuloDaProxima.toLowerCase()}`}
+          </button>
+        </div>
+      )}
+
       {editable && (
-        <button className="btn teal block" onClick={() => void finish()}>
+        <button className={`btn ${faltaFase ? 'ghost' : 'teal'} block`} onClick={() => void finish()}>
           ✅ Finalizar o play e somar os pontos
         </button>
       )}
@@ -1448,8 +1704,8 @@ function PlayDetail({
       {corrigindo && (
         <CorrigirPlacar
           match={corrigindo}
-          target={session.target}
-          desempate={regraDoPlay}
+          target={alvoDe(corrigindo)}
+          desempate={regraDe(corrigindo)}
           onClose={() => setCorrigindo(null)}
           onScore={(a, b) => { setScore(corrigindo, a, b); setCorrigindo(null) }}
         />
@@ -1500,6 +1756,7 @@ function PlayDetail({
                   {award.usouVida && ' (uma vida foi consumida para segurar o status hoje)'}
                 </div>
               )}
+              {soFase2 && <DuplasDoDia partidas={partidasDaFase2} />}
               {podios.length > 1 ? (
                 podios.map((p) => (
                   <div key={p.grupo} style={{ marginBottom: 14 }}>
@@ -1691,9 +1948,14 @@ function Situacao({
   )
 }
 
+/** A cor de um grupo, 1 a 8, repetindo da nona em diante. */
+export function classeDoGrupo(grupo?: number | null): string {
+  return grupo ? `g${((grupo - 1) % 8) + 1}` : ''
+}
+
 function GrupoTag({ grupo, total }: { grupo?: number; total: number }) {
   if (!grupo || total <= 1) return null
-  return <span className={`grupo-tag g${((grupo - 1) % 4) + 1}`}>G{grupo}</span>
+  return <span className={`grupo-tag ${classeDoGrupo(grupo)}`}>G{grupo}</span>
 }
 
 function Duo({ ids, ocupadas }: { ids: [string, string]; ocupadas?: Set<string> }) {
@@ -2287,5 +2549,159 @@ function ResolverCadastro({
         Deixar de fora deste play
       </button>
     </Modal>
+  )
+}
+
+
+/** Em uma frase: quantas duplas entram, quem fica de fora e onde comeca. */
+function descreverFase2(grupos: string[][], duplasMM: number): string {
+  const gente = grupos.reduce((t, g) => t + g.length, 0)
+  const possiveis = Math.floor(gente / 2)
+  const duplas = Math.min(possiveis, Math.max(2, duplasMM))
+  const foraDoMataMata = gente - duplas * 2
+  if (duplas < 2) return 'Poucas jogadoras para o mata-mata.'
+
+  // com o total fora da potencia de 2, as melhores passam de bye
+  let cabe = 1
+  while (cabe < duplas) cabe *= 2
+  const byes = cabe - duplas
+  // o artigo vem junto do nome: "comeca em a semifinal" nao existe
+  const nome =
+    cabe === 2 ? 'na final' : cabe === 4 ? 'na semifinal' : cabe === 8 ? 'nas quartas' : `em ${cabe} duplas`
+  const jogos = duplas - 1 // mata-mata: cada jogo elimina uma dupla
+
+  return (
+    `${duplas} duplas no mata-mata` +
+    (foraDoMataMata > 0
+      ? ` — as ${foraDoMataMata} piores da fase de grupos ficam de fora.`
+      : ' — todo mundo entra.') +
+    ` Começa ${nome}` +
+    (byes > 0 ? `, com ${byes === 1 ? 'uma dupla passando' : `${byes} duplas passando`} de bye.` : '.') +
+    ` São ${jogos} jogos até a campeã.`
+  )
+}
+
+/**
+ * Confronto direto, como ultimo criterio antes do alfabetico.
+ *
+ * Vale so dentro do grupo: na fase de grupos cada uma joga COM todas, entao duas
+ * empatadas quase sempre ja se enfrentaram -- de lados opostos, com parceiros
+ * diferentes. Quem levou a melhor nesses jogos fica na frente.
+ *
+ * Nao mexe em quem ja estava separado por pontos, diferenca de games ou
+ * vitorias: so reordena blocos que empataram nos tres.
+ */
+function desempatarNoConfronto(rank: PlayerStat[], ms: Match[]): PlayerStat[] {
+  const iguais = (a: PlayerStat, b: PlayerStat) =>
+    a.points === b.points && balance(a) === balance(b) && a.wins === b.wins
+
+  /** Saldo de games de `a` nas partidas em que enfrentou `b`. */
+  const direto = (a: string, b: string): number => {
+    let saldo = 0
+    for (const m of ms) {
+      if (m.score_a === null || m.score_b === null) continue
+      const aEmA = m.team_a.includes(a)
+      const bEmA = m.team_a.includes(b)
+      if (aEmA === bEmA) continue // mesmo lado (ou fora): nao foi confronto
+      saldo += aEmA ? m.score_a - m.score_b : m.score_b - m.score_a
+    }
+    return saldo
+  }
+
+  const out: PlayerStat[] = []
+  let i = 0
+  while (i < rank.length) {
+    let j = i + 1
+    while (j < rank.length && iguais(rank[i], rank[j])) j++
+    const bloco = rank.slice(i, j)
+    if (bloco.length > 1) {
+      bloco.sort((x, y) => direto(y.player_id, x.player_id) - direto(x.player_id, y.player_id))
+    }
+    out.push(...bloco)
+    i = j
+  }
+  return out
+}
+
+/**
+ * O ranking das duplas do mata-mata.
+ *
+ * Ordena por ATE ONDE A DUPLA CHEGOU, nao por vitorias: com bye, quem passou
+ * direto para a semi e perdeu tem uma vitoria a menos que quem ganhou as
+ * quartas e perdeu a semi -- e as duas cairam na mesma altura. A fase mais
+ * alta que a dupla jogou e a medida honesta; vitorias so desempatam dentro
+ * dela, o que separa a campea da vice.
+ */
+function DuplasDoDia({ partidas }: { partidas: Match[] }) {
+  const { nameOf, playerById } = useStore()
+
+  const linhas = useMemo(() => {
+    const stats = duoStats(partidas)
+    const ateFase = new Map<string, number>()
+    for (const m of partidas) {
+      const fase = m.fase ?? 2
+      for (const time of [m.team_a, m.team_b]) {
+        const k = pairKey(time[0], time[1])
+        ateFase.set(k, Math.max(ateFase.get(k) ?? 0, fase))
+      }
+    }
+    return [...stats.values()]
+      .map((d) => ({ ...d, ateFase: ateFase.get(d.key) ?? 0, saldo: d.gamesWon - d.gamesLost }))
+      .sort(
+        (x, y) =>
+          y.ateFase - x.ateFase ||
+          y.wins - x.wins ||
+          y.points - x.points ||
+          y.saldo - x.saldo ||
+          nameOf(x.a).localeCompare(nameOf(y.a), 'pt-BR'),
+      )
+  }, [partidas, nameOf])
+
+  if (linhas.length === 0) return null
+
+  return (
+    <>
+      <div className="section-title" style={{ fontSize: 13 }}>🤝 As duplas do mata-mata</div>
+      <div className="scroll-x">
+        <table className="table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th style={{ textAlign: 'left' }}>Dupla</th>
+              <th>V</th>
+              <th>D</th>
+              <th>Pts</th>
+              <th>Saldo</th>
+            </tr>
+          </thead>
+          <tbody>
+            {linhas.map((d, i) => (
+              <tr key={d.key}>
+                <td className={`rank-pos top${i + 1}`} style={{ fontWeight: 800 }}>{i + 1}</td>
+                <td>
+                  <div className="row" style={{ gap: 6 }}>
+                    <Avatar player={playerById(d.a)} size={24} />
+                    <Avatar player={playerById(d.b)} size={24} />
+                    <span className="ellipsis">
+                      {nameOf(d.a)} + {nameOf(d.b)}
+                    </span>
+                    {i === 0 && d.losses === 0 && <span title="campeã do dia">🏆</span>}
+                  </div>
+                </td>
+                <td>{d.wins}</td>
+                <td>{d.losses}</td>
+                <td style={{ fontWeight: 800, color: 'var(--marca)' }}>{d.points}</td>
+                <td>{d.saldo > 0 ? `+${d.saldo}` : d.saldo}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      <p className="tiny muted" style={{ marginTop: 6 }}>
+        A ordem é até onde a dupla chegou; vitórias e saldo só desempatam dentro da mesma fase.
+        Na tabela individual as duas de uma dupla empatam em tudo — ganharam e perderam as mesmas
+        partidas —, e é por isso que a dupla é a medida do dia aqui.
+      </p>
+    </>
   )
 }
