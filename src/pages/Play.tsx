@@ -1027,7 +1027,7 @@ function PlayDetail({
     () => (session.duos?.length ? duplasVivas(session.duos, doMataMata) : []),
     [session.duos, doMataMata],
   )
-  /** A fase 1 acabou e a 2 ainda nao nasceu: e a hora de sortear as duplas. */
+  /** A fase 1 acabou e a 2 ainda nao nasceu: e a hora de formar as duplas. */
   const podeGerarFase2 =
     soFase2 && daFase2.length === 0 && daFase1.length > 0 && daFase1.every(isPlayed)
   /** A rodada atual acabou e ainda ha mais de uma dupla viva. */
@@ -1680,14 +1680,14 @@ function PlayDetail({
           </div>
           <p className="tiny muted" style={{ marginTop: 0 }}>
             {podeGerarFase2
-              ? 'A fase de grupos acabou. O próximo passo é formar as duplas fixas e sortear o mata-mata — só depois disso o play tem pódio.'
+              ? 'A fase de grupos acabou. O próximo passo é formar as duplas fixas e montar a chave do mata-mata — só depois disso o play tem pódio.'
               : `A rodada terminou e ainda há ${vivas.length} duplas vivas. Monte a próxima antes de encerrar.`}
           </p>
           <button
             className="btn pink block"
             onClick={() => void (podeGerarFase2 ? gerarFase2() : gerarProximaRodada())}
           >
-            {podeGerarFase2 ? '🤝 Sortear o mata-mata' : `🥅 Montar ${rotuloDaProxima.toLowerCase()}`}
+            {podeGerarFase2 ? '🤝 Montar as duplas e a chave' : `🥅 Montar ${rotuloDaProxima.toLowerCase()}`}
           </button>
         </div>
       )}
