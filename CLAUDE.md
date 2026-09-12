@@ -109,6 +109,20 @@ supabase/*.sql   migrações, rodadas na ordem numérica no SQL Editor
   rodada pagou **na média**: nem menos, que puniria quem foi bem, nem mais, que faria
   valer a pena não jogar. Não vira partida — bye não tem adversária, então não mexe
   no Elo, no retrospecto nem na força da dupla.
+- **Grupo é por força; empate é sorteio; e a organizadora tem a última palavra.**
+  `formarGrupos`/`gruposEquilibrados` ordenam pela força, e quem está **empatada**
+  (toda estreante entra com a mesma nota) é **embaralhada antes** (`filaPorForca`) —
+  sem isso o desempate era a ordem da lista de presença, e refazer o play dava
+  sempre os mesmos grupos, com estreantes no grupo forte por ordem alfabética.
+  No cartão dos grupos dá para **tocar numa menina e movê-la** (`movidas`, por cima
+  do sorteio; um grupo nunca fica com menos de 4) e **sortear de novo**. Cada
+  chip mostra a nota e o cabeçalho a média do grupo.
+- **A força inicial é escolhida no cadastro** (`players.forca_inicial`, script 13).
+  O padrão é **1500, o meio da escala — não a média das cadastradas**: o Elo é
+  soma zero, então a média fica em 1500 sozinha enquanto todas partirem dali. Dar
+  outro ponto de partida é contar ao app o que ele ainda não sabe; depois disso as
+  partidas mandam do mesmo jeito, e o histórico é **recalculado a partir do novo
+  ponto** (`ratings()`), por isso o campo continua editável no perfil.
 - **O empate no fim é configurável** (`sessions.desempate`, `src/lib/desempate.ts`).
   São **três modos**, e o que muda é o que acontece no `alvo-1`x`alvo-1` (o 3x3):
   `alvo` (quem chegar primeiro leva), `vantagem` (“só vai a 2”, sem teto) e

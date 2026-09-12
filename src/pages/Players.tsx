@@ -2,7 +2,7 @@ import { AvisoDoBanco } from '../components/AvisoDoBanco'
 import { useMemo, useRef, useState } from 'react'
 import { Avatar, Empty, Modal } from '../components/ui'
 import ImportarLista from '../components/ImportarLista'
-import { rankingDeForca } from '../lib/forca'
+import { nivelDeForca, notaDeForca, rankingDeForca } from '../lib/forca'
 import {
   CATEGORIAS,
   categoriaDe,
@@ -13,6 +13,7 @@ import {
 } from '../lib/mensalidade'
 import { squareThumb } from '../lib/image'
 import { playedMatches } from '../lib/stats'
+import { ELO_INICIAL, ratings } from '../lib/stats'
 import { useStore } from '../lib/store'
 import { jogadorasDaPartida } from '../lib/pairing'
 import { plural, uid, type Player } from '../lib/types'
@@ -25,6 +26,8 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
   const [importando, setImportando] = useState(false)
   /** Categoria de quem for cadastrada agora; fica escolhida para a proxima. */
   const [novaCategoria, setNovaCategoria] = useState<Categoria>('isenta')
+  /** Ponto de partida do Elo de quem for cadastrada agora (escala de 1500). */
+  const [novaForca, setNovaForca] = useState(ELO_INICIAL)
   const [editando, setEditando] = useState<Player | null>(null)
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
@@ -53,6 +56,7 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
       categoria: novaCategoria,
       pago_mes: null,
       pago_avulso: false,
+      forca_inicial: novaForca === ELO_INICIAL ? null : novaForca,
     }
     await savePlayer(p)
     setName('')
@@ -124,6 +128,8 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
           <p className="tiny muted" style={{ marginTop: 6, marginBottom: 0 }}>
             {CATEGORIAS.find((c) => c.valor === novaCategoria)?.explica}
           </p>
+
+          <ForcaInicial valor={novaForca} onChange={setNovaForca} />
 
           <button
             className="btn ghost block sm"
@@ -365,6 +371,9 @@ function EditarPerfil({
   const [apelido, setApelido] = useState(jogadora.nickname ?? '')
   const [categoria, setCategoria] = useState<Categoria>(categoriaDe(jogadora))
   const [apelidos, setApelidos] = useState((jogadora.aliases ?? []).join('\n'))
+  const [forcaInicial, setForcaInicial] = useState(jogadora.forca_inicial ?? ELO_INICIAL)
+  /** A nota de hoje, ja com as partidas -- para mostrar ao lado do ponto de partida. */
+  const notaAtual = useMemo(() => notaDeForca(ratings(data).get(jogadora.id) ?? 2), [data, jogadora.id])
 
   const historico = useMemo(() => {
     const jogadas = playedMatches(data).filter((m) => jogadorasDaPartida(m).includes(jogadora.id))
@@ -393,6 +402,7 @@ function EditarPerfil({
       categoria,
       pago_mes: mudou ? null : jogadora.pago_mes,
       pago_avulso: mudou ? false : jogadora.pago_avulso,
+      forca_inicial: forcaInicial === ELO_INICIAL ? null : forcaInicial,
     })
   }
 
@@ -445,6 +455,13 @@ function EditarPerfil({
           {categoria !== categoriaDe(jogadora) && ' — trocar de categoria zera o pagamento atual.'}
         </em>
       </div>
+
+      <ForcaInicial
+        valor={forcaInicial}
+        onChange={setForcaInicial}
+        atual={historico.partidas > 0 ? notaAtual : undefined}
+        partidas={historico.partidas}
+      />
 
       <label className="field" style={{ marginTop: 12 }}>
         <span>Outras grafias do nome (uma por linha)</span>
@@ -527,6 +544,82 @@ function SinalDePagamento({ jogadora }: { jogadora: Player }) {
       {sit.alerta && (
         <div className="tiny" style={{ color: 'var(--ouro)', marginTop: 2 }}>⚠️ {sit.alerta}</div>
       )}
+    </div>
+  )
+}
+
+
+/**
+ * O ponto de partida do Elo, escolhido por quem organiza.
+ *
+ * O padrao e 1500 -- o MEIO da escala, nao a media de quem esta cadastrado. O
+ * Elo e soma zero, entao a media do grupo fica em 1500 sozinha enquanto todo
+ * mundo partir dali. Dar um ponto de partida diferente e dizer ao app o que ele
+ * ainda nao sabe: que a estreante ja joga bem (ou ainda nao). Depois disso as
+ * partidas mandam do mesmo jeito, e o historico inteiro e recalculado a partir
+ * do novo ponto -- por isso o campo continua editavel depois.
+ */
+function ForcaInicial({
+  valor,
+  onChange,
+  atual,
+  partidas = 0,
+}: {
+  valor: number
+  onChange: (v: number) => void
+  /** A nota de hoje, quando ja ha partidas. */
+  atual?: number
+  partidas?: number
+}) {
+  const nivel = nivelDeForca(valor)
+  const PASSO = 25
+  return (
+    <div className="field" style={{ marginTop: 12 }}>
+      <span>Força inicial</span>
+      <div className="row" style={{ gap: 8 }}>
+        <button
+          type="button"
+          className="btn ghost sm"
+          onClick={() => onChange(Math.max(1200, valor - PASSO))}
+          disabled={valor <= 1200}
+        >
+          −
+        </button>
+        <input
+          className="input"
+          type="number"
+          inputMode="numeric"
+          min={1200}
+          max={1800}
+          step={PASSO}
+          value={valor}
+          style={{ textAlign: 'center', fontWeight: 800 }}
+          onChange={(e) => {
+            const n = Number(e.target.value)
+            if (Number.isFinite(n)) onChange(Math.min(1800, Math.max(1200, Math.round(n))))
+          }}
+        />
+        <button
+          type="button"
+          className="btn ghost sm"
+          onClick={() => onChange(Math.min(1800, valor + PASSO))}
+          disabled={valor >= 1800}
+        >
+          +
+        </button>
+        <span className="nowrap tiny" style={{ color: nivel.cor, fontWeight: 800 }}>
+          {nivel.emoji} {nivel.titulo}
+        </span>
+      </div>
+      <em className="hint" style={{ marginTop: 6 }}>
+        {valor === ELO_INICIAL
+          ? '1500 é o meio da escala: o app ainda não sabe o nível e vai aprender com as partidas.'
+          : valor > ELO_INICIAL
+            ? `Começa ${valor - ELO_INICIAL} acima do meio — o app já a trata como mais forte ao montar os grupos e as duplas.`
+            : `Começa ${ELO_INICIAL - valor} abaixo do meio — o app já a trata como mais fraca ao montar os grupos e as duplas.`}
+        {atual !== undefined &&
+          ` Hoje, depois de ${partidas} ${partidas === 1 ? 'partida' : 'partidas'}, a nota dela é ${atual}; mudar o ponto de partida recalcula tudo a partir dele.`}
+      </em>
     </div>
   )
 }
