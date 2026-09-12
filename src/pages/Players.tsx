@@ -14,6 +14,7 @@ import {
 import { squareThumb } from '../lib/image'
 import { playedMatches } from '../lib/stats'
 import { ELO_INICIAL, ratings } from '../lib/stats'
+import { normalizar } from '../lib/roster'
 import { useStore } from '../lib/store'
 import { jogadorasDaPartida } from '../lib/pairing'
 import { plural, uid, type Player } from '../lib/types'
@@ -29,6 +30,8 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
   /** Ponto de partida do Elo de quem for cadastrada agora (escala de 1500). */
   const [novaForca, setNovaForca] = useState(ELO_INICIAL)
   const [editando, setEditando] = useState<Player | null>(null)
+  /** Filtro da lista: nome, apelido ou outra grafia, sem acento. */
+  const [busca, setBusca] = useState('')
   const fileRefs = useRef<Record<string, HTMLInputElement | null>>({})
 
   /** Forca de cada jogadora, para o nivel aparecer na linha dela. */
@@ -40,7 +43,16 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
     return m
   }, [data])
 
-  const sorted = [...data.players].sort(
+  const termo = normalizar(busca)
+  const sorted = [...data.players]
+    .filter(
+      (p) =>
+        !termo ||
+        normalizar(p.name).includes(termo) ||
+        normalizar(p.nickname ?? '').includes(termo) ||
+        (p.aliases ?? []).some((a) => normalizar(a).includes(termo)),
+    )
+    .sort(
     (a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name, 'pt-BR'),
   )
 
@@ -178,8 +190,20 @@ export default function Players({ onToast }: { onToast: (m: string) => void }) {
 
       <div className="card">
         <div className="section-title">👯 Jogadoras ({data.players.filter((p) => p.active).length} ativas)</div>
+        <input
+          className="input"
+          type="search"
+          placeholder="Buscar pelo nome, apelido ou outra grafia"
+          value={busca}
+          onChange={(e) => setBusca(e.target.value)}
+          style={{ marginBottom: 10 }}
+        />
         {sorted.length === 0 ? (
-          <Empty icon="👯">Cadastre as meninas do grupo para começar.</Empty>
+          termo ? (
+            <Empty icon="🔎">Nenhuma jogadora com “{busca.trim()}”.</Empty>
+          ) : (
+            <Empty icon="👯">Cadastre as meninas do grupo para começar.</Empty>
+          )
         ) : (
           <div className="stack">
             {sorted.map((p) => (
